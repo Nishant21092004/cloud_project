@@ -27,5 +27,19 @@ done
 echo "[entrypoint] applying migrations…"
 npx prisma migrate deploy
 
+# Auto-seed when the shop has no catalogue yet (first boot, or a fresh volume).
+# The seed is idempotent and never overwrites prices, stock or uploaded photos,
+# so an operator can also force it: `docker compose exec backend npm run seed`.
+if [ "${SEED_ON_START:-1}" = "1" ]; then
+  if node -e "
+    const { PrismaClient } = require('@prisma/client');
+    const p = new PrismaClient();
+    p.flower.count().then((c) => process.exit(c === 0 ? 0 : 1)).catch(() => process.exit(1)).finally(() => p.\$disconnect());
+  " 2>/dev/null; then
+    echo "[entrypoint] empty catalogue detected — seeding demonstration data…"
+    npx tsx prisma/seed.ts || echo "[entrypoint] ⚠️  auto-seed failed — run 'docker compose exec backend npm run seed' manually"
+  fi
+fi
+
 echo "[entrypoint] starting API on port ${PORT:-4000}"
 exec node dist/server.js

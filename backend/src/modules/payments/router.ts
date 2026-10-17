@@ -16,9 +16,57 @@ import { createPaymentOrder, fetchProviderPayment, verifyCheckoutSignature, veri
 
 export const paymentsRouter = Router();
 
-/** Public: the frontend asks whether online payment is available (+ public key id). */
+/**
+ * Public: the frontend asks what online payment is available.
+ *  - `razorpay.enabled`  → real (test-mode) gateway is wired up on this server
+ *  - `demoOnline.enabled`→ the simulated gateway is *always* offered, so the
+ *    storefront can demonstrate a full prepaid checkout with no credentials
+ *    and no money movement. The two are never conflated in the UI.
+ */
 paymentsRouter.get("/config", (_req, res) => {
-  res.json({ enabled: razorpayEnabled, keyId: razorpayEnabled ? env.RAZORPAY_KEY_ID : null });
+  res.json({
+    enabled: razorpayEnabled,
+    keyId: razorpayEnabled ? env.RAZORPAY_KEY_ID : null,
+    demoOnline: {
+      enabled: true,
+      simulated: true,
+      note: "Simulated UPI / card / netbanking for classroom evaluation. No gateway is contacted and no money moves.",
+    },
+    methods: ["upi", "card", "netbanking", "wallet", "cod"],
+  });
+});
+
+/**
+ * Records *which* simulated method the customer picked in the demo gateway, so
+ * the order trail is honest: provider `demo`, status `SIMULATED`, never
+ * `CAPTURED`, and never counted as revenue by the admin dashboard.
+ */
+paymentsRouter.post("/demo/record", requireAuth, async (req, res, next) => {
+  try {
+    const user = (req as AuthedRequest).user!;
+    const { orderNumber, method } = parse(
+      z.object({ orderNumber: z.string().min(3), method: z.enum(["upi", "card", "netbanking", "wallet"]) }),
+      req.body,
+    );
+    const order = await prisma.order.findUnique({ where: { orderNumber }, include: { payments: true } });
+    if (!order || order.userId !== user.id) throw notFound("Order not found");
+    if (order.paymentMethod !== "DEMO_ONLINE") throw badRequest("NOT_DEMO_ORDER", "This order was not placed through the simulated gateway");
+    const already = order.payments.find((p) => p.provider === "demo");
+    if (already) {
+      res.json({ recorded: true, replayed: true, paymentId: already.id });
+      return;
+    }
+    const payment = await prisma.payment.create({
+      data: {
+        orderId: order.id, provider: "demo", amountPaise: order.totalPaise, status: "SIMULATED", method,
+        rawPayload: { note: "Simulated payment for a classroom demo — no gateway call was made and no money moved." },
+      },
+    });
+    await prisma.orderEvent.create({
+      data: { orderId: order.id, status: "PAYMENT_SIMULATED", note: `Demo ${method} payment recorded (no real charge)`, actorRole: "SYSTEM" },
+    });
+    res.status(201).json({ recorded: true, replayed: false, paymentId: payment.id });
+  } catch (e) { next(e); }
 });
 
 /** Create a gateway order for a pending online-payment order. */

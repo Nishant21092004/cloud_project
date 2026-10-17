@@ -80,7 +80,11 @@ export async function createOrder(userId: string, input: CheckoutInput, idempote
   if (!pincodeRow.serviceable) {
     throw conflict("NOT_SERVICEABLE", `Sorry, we do not deliver to PIN ${addressData.pincode} yet`, { pincode: addressData.pincode });
   }
-  const slot = await prisma.deliverySlot.findFirst({ where: { id: input.slotId, active: true } });
+  // "default" is the fallback slot the catalog service reports when a database
+  // has no DeliverySlot rows — checkout must never be blocked by missing config.
+  const slot = input.slotId === "default"
+    ? { label: "Any time (9 AM – 8 PM)" }
+    : await prisma.deliverySlot.findFirst({ where: { id: input.slotId, active: true } });
   if (!slot) throw badRequest("INVALID_SLOT", "Please choose a valid delivery slot");
 
   const deliveryDate = parseDeliveryDate(input.deliveryDate);
@@ -223,7 +227,15 @@ export async function createOrder(userId: string, input: CheckoutInput, idempote
         slotLabel: slot.label,
         expiresAt,
         items: { create: itemsData },
-        events: { create: { status: "PLACED", note: `Order placed via ${input.paymentMethod === "COD" ? "Cash on Delivery" : input.paymentMethod === "DEMO_ONLINE" ? "SIMULATED online payment (no money charged)" : "Razorpay online payment"}`, actorRole: "CUSTOMER" } },
+        events: {
+          create: {
+            status: "PLACED",
+            note:
+              `Order placed via ${input.paymentMethod === "COD" ? "Cash on Delivery" : input.paymentMethod === "DEMO_ONLINE" ? "SIMULATED online payment (no money charged)" : "Razorpay online payment"}` +
+              deliveryNote(pincodeRow),
+            actorRole: "CUSTOMER",
+          },
+        },
       },
     });
 
@@ -245,6 +257,15 @@ export async function createOrder(userId: string, input: CheckoutInput, idempote
   });
 
   return { order: await getOrderForUser(order.orderNumber, userId), replayed: false };
+}
+
+/** Records which coverage path priced the order — useful when a customer asks "why ₹90?". */
+function deliveryNote(serviceability: Awaited<ReturnType<typeof checkServiceability>>): string {
+  if (!serviceability.serviceable) return "";
+  const where = serviceability.city ? ` to ${serviceability.city}` : "";
+  const eta = serviceability.etaDaysMin && serviceability.etaDaysMax ? `, ETA ${serviceability.etaDaysMin}–${serviceability.etaDaysMax} day(s)` : "";
+  const source = serviceability.demoCoverage ? " (India-wide demo estimate)" : " (configured PIN zone)";
+  return `${where}${eta}${source}`;
 }
 
 async function resolveAddress(userId: string, input: CheckoutInput) {

@@ -1,7 +1,11 @@
 import { Router } from "express";
 import { z } from "zod";
 import { parse, pincodeSchema } from "../../lib/validate.js";
-import { checkServiceability, getActiveSlots, getBuilderOptions, getProductBySlug, listBouquets, listFlowers, listPlants, type CatalogFilters } from "./service.js";
+import {
+  checkServiceability, getActiveSlots, getBuilderOptions, getDeliveryCoverage,
+  getProductBySlug, listBouquets, listFlowers, listPlants, lookupUnavailableProduct,
+  type CatalogFilters,
+} from "./service.js";
 import { priceCustomBouquet } from "./pricing.js";
 import { loadConfigFromInput } from "../cart/service.js";
 
@@ -20,16 +24,60 @@ function filtersFromQuery(query: Record<string, unknown>): CatalogFilters {
   };
 }
 
+/**
+ * Lists answer `{ <plural>: [...], meta }`. `meta.unavailable` is how an
+ * unlisted search term reaches the storefront: an Out-of-stock card with a
+ * photo and near matches, instead of "no products found".
+ */
 catalogRouter.get("/flowers", async (req, res, next) => {
-  try { res.json({ flowers: await listFlowers(filtersFromQuery(req.query)) }); } catch (e) { next(e); }
+  try {
+    const { flowers, meta } = await listFlowers(filtersFromQuery(req.query));
+    res.json({ flowers, meta });
+  } catch (e) { next(e); }
 });
 
 catalogRouter.get("/bouquets", async (req, res, next) => {
-  try { res.json({ bouquets: await listBouquets(filtersFromQuery(req.query)) }); } catch (e) { next(e); }
+  try {
+    const { bouquets, meta } = await listBouquets(filtersFromQuery(req.query));
+    res.json({ bouquets, meta });
+  } catch (e) { next(e); }
 });
 
 catalogRouter.get("/plants", async (req, res, next) => {
-  try { res.json({ plants: await listPlants(filtersFromQuery(req.query)) }); } catch (e) { next(e); }
+  try {
+    const { plants, meta } = await listPlants(filtersFromQuery(req.query));
+    res.json({ plants, meta });
+  } catch (e) { next(e); }
+});
+
+/** Explicit "we don't list this" lookup used by the search bar's suggestions. */
+catalogRouter.get("/unavailable", async (req, res, next) => {
+  try {
+    const { q, category } = parse(
+      z.object({
+        q: z.string().trim().min(2, "Type at least two characters").max(80),
+        category: z.enum(["flowers", "bouquets", "plants"]).default("flowers"),
+      }),
+      req.query,
+    );
+    res.json(await lookupUnavailableProduct(q, category));
+  } catch (e) { next(e); }
+});
+
+/** One search across all three departments (the navbar search box). */
+catalogRouter.get("/search", async (req, res, next) => {
+  try {
+    const { q } = parse(z.object({ q: z.string().trim().min(1).max(80) }), req.query);
+    const f = { q };
+    const [flowers, bouquets, plants] = await Promise.all([listFlowers(f), listBouquets(f), listPlants(f)]);
+    res.json({
+      query: q,
+      flowers: flowers.flowers.slice(0, 8),
+      bouquets: bouquets.bouquets.slice(0, 8),
+      plants: plants.plants.slice(0, 8),
+      total: flowers.meta.total + bouquets.meta.total + plants.meta.total,
+    });
+  } catch (e) { next(e); }
 });
 
 catalogRouter.get("/products/:slug", async (req, res, next) => {
@@ -42,6 +90,11 @@ catalogRouter.get("/options", async (_req, res, next) => {
 
 catalogRouter.get("/delivery-slots", async (_req, res, next) => {
   try { res.json({ slots: await getActiveSlots() }); } catch (e) { next(e); }
+});
+
+/** Coverage tables for the public delivery page — no auth, no PII. */
+catalogRouter.get("/delivery-coverage", async (_req, res, next) => {
+  try { res.json(await getDeliveryCoverage()); } catch (e) { next(e); }
 });
 
 catalogRouter.get("/serviceability/:pincode", async (req, res, next) => {
