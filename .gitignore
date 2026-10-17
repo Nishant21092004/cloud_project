@@ -1,0 +1,31 @@
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Builds
+backend/dist/
+frontend/dist/
+
+# Environment files (keep the .example files only)
+.env
+backend/.env
+backend/.env.local
+frontend/.env
+
+# Uploads created at runtime
+backend/uploads/
+backend/public/uploads/
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Test artifacts
+coverage/
+.vitest/

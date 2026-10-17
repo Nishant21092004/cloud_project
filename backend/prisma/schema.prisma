@@ -1,0 +1,409 @@
+// BloomNest — Prisma schema
+// All monetary values are stored as INTEGER PAISE (₹1 = 100 paise).
+// Stock lives at the lowest sellable level:
+//   - flowers  → stockStems   (per-stem inventory)
+//   - plants   → PlantVariant.stock (per variant inventory)
+//   - bouquets → derived from the recipe's flower stems (no own stock row)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  CUSTOMER
+  ADMIN
+}
+
+enum CartItemKind {
+  FLOWER // qty = stems
+  BOUQUET // ready-made, qty = bouquets
+  PLANT // qty = units of a variant
+  CUSTOM // custom bouquet builder item
+}
+
+enum OrderStatus {
+  PLACED
+  CONFIRMED
+  PREPARING
+  OUT_FOR_DELIVERY
+  DELIVERED
+  CANCELLED
+}
+
+enum PaymentMethod {
+  COD
+  RAZORPAY
+  DEMO_ONLINE // simulated payment for classroom demos; never actual money
+}
+
+enum PaymentStatus {
+  PENDING // online payment awaited
+  PAID // verified payment received
+  DEMO_PAID // simulated online payment, NO actual money charged
+  FAILED // gateway reported failure (retry possible until expiry)
+  COD_PENDING // cash to be collected on delivery
+  COD_COLLECTED // cash received
+  REFUND_REQUESTED // prepaid cancellation — refund to be handled via gateway dashboard
+  REFUNDED // admin marked AFTER a verified refund in the gateway dashboard
+  CANCELLED // unpaid online order cancelled/expired before payment
+}
+
+enum ExtraKind {
+  ADDON
+  CARD // greeting card — enables the free gift message
+}
+
+// ── users & addresses ────────────────────────────────────────────────
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  passwordHash String
+  name         String
+  phone        String?
+  role         Role      @default(CUSTOMER)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  cart        Cart?
+  addresses   Address[]
+  orders      Order[]
+  idempotency IdempotencyKey[]
+}
+
+model Address {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  recipientName String
+  phone         String
+  pincode       String
+  line1         String
+  line2         String?
+  city          String
+  state         String
+  isDefault     Boolean  @default(false)
+  createdAt     DateTime @default(now())
+
+  @@index([userId])
+}
+
+// ── catalogue ────────────────────────────────────────────────────────
+model Flower {
+  id                 String   @id @default(cuid())
+  slug               String   @unique
+  name               String
+  description        String
+  colorHex           String   @default("#e56b8c")
+  imageUrl           String
+  pricePerStemPaise  Int
+  stockStems         Int      @default(0)
+  lowStockThreshold  Int      @default(20)
+  active             Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  recipeItems     BouquetItem[]
+  customBouquets  CustomBouquetFlower[]
+  orderItemLinks  OrderItem[] @relation("OrderItemFlower")
+  cartItems       CartItem[]  @relation("CartFlower")
+
+  @@index([active])
+}
+
+model Bouquet {
+  id          String   @id @default(cuid())
+  slug        String   @unique
+  name        String
+  description String
+  imageUrl    String
+  pricePaise  Int
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  recipe         BouquetItem[]
+  orderItemLinks OrderItem[] @relation("OrderItemBouquet")
+  cartItems      CartItem[]  @relation("CartBouquet")
+
+  @@index([active])
+}
+
+// recipe: how many stems of each flower a ready-made bouquet consumes
+model BouquetItem {
+  id        String @id @default(cuid())
+  bouquetId String
+  bouquet   Bouquet @relation(fields: [bouquetId], references: [id], onDelete: Cascade)
+  flowerId  String
+  flower    Flower @relation(fields: [flowerId], references: [id])
+  stems     Int
+
+  @@unique([bouquetId, flowerId])
+}
+
+model Plant {
+  id               String   @id @default(cuid())
+  slug             String   @unique
+  name             String
+  description      String
+  imageUrl         String
+  careWatering     String // e.g. "Every 2–3 days"
+  careLight        String // e.g. "Bright indirect light"
+  careNotes        String?
+  active           Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  variants       PlantVariant[]
+  orderItemLinks OrderItem[] @relation("OrderItemPlant")
+
+  @@index([active])
+}
+
+// purchasable combination — price & stock live HERE, never on the plant
+model PlantVariant {
+  id         String  @id @default(cuid())
+  plantId    String
+  plant      Plant   @relation(fields: [plantId], references: [id], onDelete: Cascade)
+  potType    String // Nursery / Plastic / Ceramic ...
+  size       String // Small / Medium / Large
+  label      String // denormalised for carts: "Ceramic pot · Large"
+  pricePaise Int
+  stock      Int     @default(0)
+  active     Boolean @default(true)
+
+  orderItemLinks OrderItem[] @relation("OrderItemPlantVariant")
+  cartItems      CartItem[]  @relation("CartPlantVariant")
+
+  @@unique([plantId, potType, size])
+  @@index([active])
+}
+
+// ── customisation options (admin managed) ────────────────────────────
+model WrappingOption {
+  id          String  @id @default(cuid())
+  name        String  @unique
+  chargePaise Int
+  active      Boolean @default(true)
+  customBouquets CustomBouquet[]
+}
+
+model RibbonOption {
+  id          String  @id @default(cuid())
+  name        String  @unique
+  chargePaise Int
+  active      Boolean @default(true)
+  customBouquets CustomBouquet[]
+}
+
+model ExtraOption {
+  id          String    @id @default(cuid())
+  name        String    @unique
+  kind        ExtraKind @default(ADDON)
+  chargePaise Int
+  active      Boolean   @default(true)
+  customBouquets CustomBouquetExtra[]
+}
+
+// ── cart ─────────────────────────────────────────────────────────────
+model Cart {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  items CartItem[]
+}
+
+model CartItem {
+  id              String       @id @default(cuid())
+  cartId          String
+  cart            Cart         @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  kind            CartItemKind
+  qty             Int          @default(1) // bouquets & plants; flowers use stems
+  stems           Int? // FLOWER items: number of loose stems
+  flowerId        String?
+  plantVariantId  String?
+  bouquetId       String?
+  customBouquetId String? @unique // 1:1 — a custom bouquet belongs to one cart line
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  flower        Flower?        @relation("CartFlower", fields: [flowerId], references: [id])
+  plantVariant  PlantVariant?  @relation("CartPlantVariant", fields: [plantVariantId], references: [id])
+  bouquet       Bouquet?       @relation("CartBouquet", fields: [bouquetId], references: [id])
+  customBouquet CustomBouquet? @relation(fields: [customBouquetId], references: [id], onDelete: Cascade)
+
+  @@index([cartId])
+}
+
+// custom bouquet configuration (1:1 with a CUSTOM CartItem)
+model CustomBouquet {
+  id              String   @id @default(cuid())
+  wrappingId      String?
+  wrapping        WrappingOption? @relation(fields: [wrappingId], references: [id])
+  ribbonId        String?
+  ribbon          RibbonOption?   @relation(fields: [ribbonId], references: [id])
+  greetingMessage String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  cartItem CartItem?
+  flowers  CustomBouquetFlower[]
+  extras   CustomBouquetExtra[]
+}
+
+model CustomBouquetFlower {
+  id               String        @id @default(cuid())
+  customBouquetId  String
+  customBouquet    CustomBouquet @relation(fields: [customBouquetId], references: [id], onDelete: Cascade)
+  flowerId         String
+  flower           Flower        @relation(fields: [flowerId], references: [id])
+  stems            Int
+
+  @@unique([customBouquetId, flowerId])
+}
+
+model CustomBouquetExtra {
+  id              String        @id @default(cuid())
+  customBouquetId String
+  customBouquet   CustomBouquet @relation(fields: [customBouquetId], references: [id], onDelete: Cascade)
+  extraId         String
+  extra           ExtraOption   @relation(fields: [extraId], references: [id])
+
+  @@unique([customBouquetId, extraId])
+}
+
+// ── delivery configuration ───────────────────────────────────────────
+model ServiceablePincode {
+  pincode         String  @id // 6-digit
+  city            String?
+  deliveryFeePaise Int    @default(4000)
+  active          Boolean @default(true)
+}
+
+model DeliverySlot {
+  id        String  @id @default(cuid())
+  label     String  @unique // "Morning (9 AM – 12 PM)"
+  sortOrder Int     @default(0)
+  active    Boolean @default(true)
+}
+
+// ── orders ───────────────────────────────────────────────────────────
+model Order {
+  id             String        @id @default(cuid())
+  orderNumber    String        @unique
+  userId         String
+  user           User          @relation(fields: [userId], references: [id])
+  status         OrderStatus   @default(PLACED)
+  paymentMethod  PaymentMethod
+  paymentStatus  PaymentStatus @default(COD_PENDING)
+  subtotalPaise  Int
+  deliveryFeePaise Int
+  totalPaise     Int
+  // delivery snapshot (never references live Address — historical safety)
+  recipientName  String
+  phone          String
+  pincode        String
+  addressLine    String
+  city           String
+  state          String
+  deliveryDate   DateTime
+  slotLabel      String
+  expiresAt      DateTime? // online payments: reservation expiry
+  cancelledAt    DateTime?
+  cancelReason   String?
+  refundNote     String?
+  stockRestored  Boolean       @default(false)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  items     OrderItem[]
+  events    OrderEvent[]
+  payments  Payment[]
+
+  @@index([userId, createdAt])
+  @@index([status, paymentStatus])
+}
+
+model OrderItem {
+  id              String       @id @default(cuid())
+  orderId         String
+  order           Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  kind            CartItemKind
+  title           String // snapshot name
+  subtitle        String? // variant label / composition summary
+  qty             Int          @default(1)
+  stems           Int? // loose flower stems
+  unitPricePaise  Int
+  lineTotalPaise  Int
+  // snapshots for custom bouquets (JSON, historical record)
+  customSnapshot  Json?
+  flowerId        String?
+  flower          Flower?       @relation("OrderItemFlower", fields: [flowerId], references: [id])
+  plantVariantId  String?
+  plantVariant    PlantVariant? @relation("OrderItemPlantVariant", fields: [plantVariantId], references: [id])
+  bouquetId       String?
+  bouquet         Bouquet?      @relation("OrderItemBouquet", fields: [bouquetId], references: [id])
+  plantId         String?
+  plant           Plant?        @relation("OrderItemPlant", fields: [plantId], references: [id])
+  createdAt       DateTime      @default(now())
+
+  @@index([orderId])
+}
+
+model OrderEvent {
+  id        String      @id @default(cuid())
+  orderId   String
+  order     Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  status    String // status or event label, e.g. "PLACED", "CANCELLED"
+  note      String?
+  actorRole String // CUSTOMER | ADMIN | SYSTEM
+  createdAt DateTime    @default(now())
+
+  @@index([orderId])
+}
+
+// ── payments ─────────────────────────────────────────────────────────
+model Payment {
+  id             String   @id @default(cuid())
+  orderId        String
+  order          Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  provider       String   @default("razorpay")
+  rzpOrderId     String?  @unique
+  rzpPaymentId   String?  @unique // natural idempotency barrier
+  rzpSignature   String?
+  amountPaise    Int
+  status         String   @default("CREATED") // CREATED|CAPTURED|FAILED|LATE
+  method         String? // upi / card / netbanking (from gateway)
+  rawPayload     Json?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([orderId])
+}
+
+// processed webhook events → guarantees idempotent handling
+model WebhookEvent {
+  id        String   @id @default(cuid())
+  eventId   String   @unique
+  type      String
+  createdAt DateTime @default(now())
+}
+
+// checkout idempotency keys → double-click never creates two orders
+model IdempotencyKey {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  key       String
+  orderId   String?
+  createdAt DateTime @default(now())
+
+  @@unique([userId, key])
+}

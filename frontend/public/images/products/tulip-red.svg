@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="800" viewBox="0 0 800 800">
+<defs>
+  <radialGradient id="bg" cx="50%" cy="42%" r="75%">
+    <stop offset="0%" stop-color="#fffdf7"/><stop offset="100%" stop-color="#faf6ee"/>
+  </radialGradient>
+</defs>
+<rect width="800" height="800" fill="url(#bg)"/>
+<circle cx="400" cy="352" r="336" fill="none" stroke="#e7dfcf" stroke-width="2" stroke-dasharray="1 7" stroke-linecap="round"/>
+<path d="M 390 760 Q 350 540 250 320" stroke="#4c7a58" stroke-width="7" fill="none" stroke-linecap="round"/><path d="M 0 0 Q 45 -37.8 90 0 Q 45 37.8 0 0 Z" fill="#7fa88c" transform="translate(320 560) rotate(-30)"/><path d="M 0 0 Q 35 -29.4 70 0 Q 35 29.4 0 0 Z" fill="#7fa88c" transform="translate(270 430) rotate(-70)"/><path d="M 410 760 Q 457.5 555 565 350" stroke="#4c7a58" stroke-width="7" fill="none" stroke-linecap="round"/><path d="M 0 0 Q 42.5 -35.699999999999996 85 0 Q 42.5 35.699999999999996 0 0 Z" fill="#7fa88c" transform="translate(490 580) rotate(25)"/><path d="M 0 0 Q 33 -27.72 66 0 Q 33 27.72 0 0 Z" fill="#7fa88c" transform="translate(540 450) rotate(65)"/><path d="M 215.9 258.5 Q 205.36 326.7 250 343.44 Q 294.64 326.7 284.1 258.5 Q 250 295.7 215.9 258.5 Z" fill="#d63031"/>
+<path d="M 250 260.36 Q 228.3 305 250 342.2 Q 271.7 305 250 260.36 Z" fill="#8a0000" opacity="0.5"/><path d="M 534.2 293 Q 524.68 354.6 565 369.72 Q 605.32 354.6 595.8 293 Q 565 326.6 534.2 293 Z" fill="#d63031"/>
+<path d="M 565 294.68 Q 545.4 335 565 368.6 Q 584.6 335 565 294.68 Z" fill="#8a0000" opacity="0.5"/><path d="M 400 760 Q 400 505 400 250" stroke="#4c7a58" stroke-width="7" fill="none" stroke-linecap="round"/><path d="M 0 0 Q 50 -42 100 0 Q 50 42 0 0 Z" fill="#7fa88c" transform="translate(345 500) rotate(-12)"/><path d="M 0 0 Q 47.5 -39.9 95 0 Q 47.5 39.9 0 0 Z" fill="#7fa88c" transform="translate(460 470) rotate(100)"/><path d="M 342.25 161.25 Q 324.4 276.75 400 305.1 Q 475.6 276.75 457.75 161.25 Q 400 224.25 342.25 161.25 Z" fill="#d63031"/>
+<path d="M 400 164.4 Q 363.25 240 400 303 Q 436.75 240 400 164.4 Z" fill="#8a0000" opacity="0.5"/><ellipse cx="400" cy="768" rx="150" ry="18" fill="#00000012"/>
+</svg>

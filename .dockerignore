@@ -1,0 +1,13 @@
+node_modules
+dist
+backend/dist
+frontend/dist
+backend/uploads
+.git
+.gitignore
+.env
+backend/.env
+docs
+scripts/smoke.mjs
+*.log
+coverage

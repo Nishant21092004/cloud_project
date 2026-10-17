@@ -1,0 +1,30 @@
+# Development helpers — run ONLY the database in Docker and the
+# backend/frontend with hot reload on the host.
+#
+#   Windows PowerShell:
+#     docker compose -f docker-compose.dev.yml up -d db
+#     cd backend ; npm install ; npm run dev        (API on :4000)
+#     cd frontend ; npm install ; npm run dev       (site on :5173, proxies /api)
+#
+name: bloomnest-dev
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: bloomnest
+      POSTGRES_PASSWORD: bloomnest
+      POSTGRES_DB: bloomnest
+    volumes:
+      - dev_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bloomnest"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+volumes:
+  dev_db_data:

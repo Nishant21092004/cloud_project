@@ -1,0 +1,121 @@
+{
+  "flowers": [
+    {
+      "slug": "rose-red",
+      "file": "images/products/rose-red.svg"
+    },
+    {
+      "slug": "rose-pink",
+      "file": "images/products/rose-pink.svg"
+    },
+    {
+      "slug": "rose-white",
+      "file": "images/products/rose-white.svg"
+    },
+    {
+      "slug": "lily-white",
+      "file": "images/products/lily-white.svg"
+    },
+    {
+      "slug": "lily-pink",
+      "file": "images/products/lily-pink.svg"
+    },
+    {
+      "slug": "orchid-purple",
+      "file": "images/products/orchid-purple.svg"
+    },
+    {
+      "slug": "carnation-pink",
+      "file": "images/products/carnation-pink.svg"
+    },
+    {
+      "slug": "gerbera-orange",
+      "file": "images/products/gerbera-orange.svg"
+    },
+    {
+      "slug": "gerbera-pink",
+      "file": "images/products/gerbera-pink.svg"
+    },
+    {
+      "slug": "sunflower",
+      "file": "images/products/sunflower.svg"
+    },
+    {
+      "slug": "marigold-orange",
+      "file": "images/products/marigold-orange.svg"
+    },
+    {
+      "slug": "tulip-red",
+      "file": "images/products/tulip-red.svg"
+    },
+    {
+      "slug": "chrysanthemum-white",
+      "file": "images/products/chrysanthemum-white.svg"
+    },
+    {
+      "slug": "tuberose",
+      "file": "images/products/tuberose.svg"
+    }
+  ],
+  "bouquets": [
+    {
+      "slug": "blush-romance",
+      "file": "images/products/blush-romance.svg"
+    },
+    {
+      "slug": "sunrise-delight",
+      "file": "images/products/sunrise-delight.svg"
+    },
+    {
+      "slug": "orchid-elegance",
+      "file": "images/products/orchid-elegance.svg"
+    },
+    {
+      "slug": "carnation-comfort",
+      "file": "images/products/carnation-comfort.svg"
+    },
+    {
+      "slug": "royal-white",
+      "file": "images/products/royal-white.svg"
+    },
+    {
+      "slug": "gerbera-cheer",
+      "file": "images/products/gerbera-cheer.svg"
+    }
+  ],
+  "plants": [
+    {
+      "slug": "money-plant",
+      "file": "images/products/money-plant.svg"
+    },
+    {
+      "slug": "tulsi-holy-basil",
+      "file": "images/products/tulsi-holy-basil.svg"
+    },
+    {
+      "slug": "aloe-vera",
+      "file": "images/products/aloe-vera.svg"
+    },
+    {
+      "slug": "snake-plant",
+      "file": "images/products/snake-plant.svg"
+    },
+    {
+      "slug": "jade-plant",
+      "file": "images/products/jade-plant.svg"
+    },
+    {
+      "slug": "peace-lily",
+      "file": "images/products/peace-lily.svg"
+    },
+    {
+      "slug": "areca-palm",
+      "file": "images/products/areca-palm.svg"
+    },
+    {
+      "slug": "zz-plant",
+      "file": "images/products/zz-plant.svg"
+    }
+  ],
+  "misc": []
+}

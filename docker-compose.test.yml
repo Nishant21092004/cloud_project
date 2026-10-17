@@ -1,0 +1,45 @@
+# Automated integration test stack (used by CI and `npm test`).
+#
+#   docker compose -f docker-compose.test.yml up --build --abort-on-container-exit --exit-code-from backend-test
+#
+# The test database is ephemeral: it lives in tmpfs and disappears when the
+# stack is removed, so tests never touch real data.
+name: bloomnest-test
+
+services:
+  db-test:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: bloomnest_test
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d bloomnest_test"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  backend-test:
+    build:
+      context: ./backend
+      target: builder
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db-test:5432/bloomnest_test
+      NODE_ENV: test
+      JWT_SECRET: test_secret_do_not_use_in_production_0123456789
+      ORDER_PAYMENT_TTL_MINUTES: "30"
+      # Razorpay signature logic is tested with this throwaway secret.
+      # The SDK itself is mocked in the suite — no real gateway is contacted.
+      RAZORPAY_KEY_ID: test_key_id
+      RAZORPAY_KEY_SECRET: test_key_secret
+      RAZORPAY_WEBHOOK_SECRET: test_webhook_secret
+      # suites share one in-memory limiter — lift it for CI only
+      RATE_LIMIT_CHECKOUT_PER_MIN: "1000"
+      RATE_LIMIT_AUTH_PER_15M: "1000"
+      RATE_LIMIT_API_PER_15M: "10000"
+    command: sh -c "npx prisma migrate deploy && npm test"
+    depends_on:
+      db-test:
+        condition: service_healthy
