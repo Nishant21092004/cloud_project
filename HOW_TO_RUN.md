@@ -28,9 +28,13 @@ docker compose up --build -d
 # 2. Wait until all three say "healthy" (re-run until healthy):
 docker compose ps
 
-# 3. Load the demo catalogue (14 flowers, 6 bouquets, 8 plants, pincodes, admin user).
-#    FIRST BOOT ONLY — running it twice just re-inserts the same demo data.
+# 3. Load the demo catalogue (146 flowers, 193 plants, 24 bouquets, serviceable
+#    PIN codes, delivery slots, demo + admin users). Safe to re-run: the seed is
+#    idempotent and never overwrites a price, stock count or photo you edited.
 docker compose exec backend npm run seed
+
+#    ...or let the helper do build + restart + seed + health-check + counts:
+#    powershell -ExecutionPolicy Bypass -File .\REBUILD.ps1 -Seed
 
 # 4. Open the store:
 start http://localhost

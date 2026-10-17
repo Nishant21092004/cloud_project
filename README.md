@@ -24,26 +24,40 @@ React storefront + admin dashboard, all running on Docker.
 
 ## BloomNest catalogue & checkout update (17 Oct 2026)
 
-- **152 demo products** after running `npm run seed`: **80 flowers + 60 plants + 12 bouquets**. Demo prices and stock are illustrative, not a promise of real inventory. Seeding is idempotent and keeps manually edited prices/stock and custom photos.
-- Product cards show a real-photo **reference gallery (four images)** on hover; details show four selectable thumbnails. Photo URLs are provided by [LoremFlickr](https://loremflickr.com/) using plant/flower keywords; the user must have internet access. These are illustrative third-party photographs, **not guaranteed to depict the exact listed cultivar**. Bundled SVG fallback images remain available when the service fails. For a real shop, use licensed, species-accurate assets hosted on your own CDN.
-- Search for an item not in the current catalogue: **Out of stock** with a representative photo rather than a dead-end. Price/stock filter mismatches keep normal no-results messaging.
-- Enter a 10-digit mobile or `0`/`+91` prefix. A disabled Place Order button now explains the missing information. Orders use original transactional stock, pricing, and idempotency protections.
-- India-wide **demo delivery estimates** for PINs starting 1–8. Explicit admin PIN entries override them, including disabled delivery zones. This is a classroom simulation **not a courier serviceability claim**; do not promise genuine fulfilment without a live carrier or India Post validation.
-- Checkout provides COD, **Demo online (simulated UPI/card/netbanking, no money charged)**, and Razorpay integration when you configure Razorpay **test keys**. Demo payments have separate `DEMO_PAID` status and are never counted as verified money. Real live payment requires merchant onboarding, keys, verification and operational setup.
+- **363 catalogue listings** after running the seed: **146 flowers (38 species families) + 193 houseplants (10 groups, 498 pot variants) + 24 bouquet recipes**, with Hindi names in the description so `गेंदा`, `गुलाब`, `money plant` etc. all search. Seeding is idempotent: re-running it never overwrites a price, a stock count or a photo you edited in the admin panel.
+- **Real photographs, not illustrations.** Every card asks [Wikimedia Commons](https://commons.wikimedia.org) for pictures of that exact species (search built from the binomial name + colour, e.g. `Tagetes erecta marigold orange`) and shows whichever frames come back, with the photographer + licence credited under the photo. Your own `/uploads/…` image in the admin panel always wins; if the browser has no internet the card draws per-product artwork in the flower's own colour, so nothing ever appears broken. See [docs/IMAGES.md](docs/IMAGES.md).
+- **Hover a card → 3–4 more photographs of the same flower** slide out on the side and auto-advance; the product page has the same set as a lightbox gallery. A "N photos" chip appears only when real photographs actually loaded.
+- **Search never dead-ends.** A term we do not stock shows an **Out of stock** result — with representative photos, the price it would carry, an alert-me link, and "closest in stock" alternatives. The same treatment applies to a product page for a sold-out flower, which also shows in-stock relatives.
+- **Checkout is not COD-only any more.** Payment methods come from the API: Cash on Delivery, **Demo online payment** (simulated UPI/card/netbanking — no money moves, order ends as `DEMO_PAID`), and **Razorpay** whenever `RAZORPAY_KEY_ID`/`RAZORPAY_KEY_SECRET` are set. A disabled *Place order* button now lists every reason it is disabled right under the button.
+- **Delivery is all-India, not Delhi-only.** `GET /api/catalog/delivery-coverage` returns every circle; PIN codes beginning 1–8 are serviceable with an ETA + fee (metro hubs cheaper, north-east/remote costlier, ₹39 floor), `0…`/`9…` (defence / postal) are refused, and the admin panel's explicit PIN rows always override. The table behind it is `backend/src/modules/catalog/pincode-data.ts`; `/delivery` lists every circle and state. **This is a classroom simulation, not a courier contract** — no real fulfilment is promised.
+- 10-digit mobile numbers, `0`/`+91` prefixes and stray spaces are normalised. Orders keep transactional stock, pricing and idempotency protections.
 
-**To replace GitHub ShopSense with this project**, first test BloomNest locally; then run `./SYNC_TO_GITHUB.ps1` in PowerShell from `D:\cc_project` and type `REPLACE` after reviewing the warning. This force-with-lease replaces the **main branch contents**, not the repo name. Do not confuse a local ZIP with a completed remote update.
-
-**After updating an existing Docker checkout** (keep existing `.env` and volumes):
+### Applying these changes to a running checkout
 
 ```powershell
-docker compose up -d --build
-docker compose exec backend npm run seed
-docker compose ps
+# Windows, from D:\cc_project
+powershell -ExecutionPolicy Bypass -File .\REBUILD.ps1 -Seed      # build + restart + seed
+powershell -ExecutionPolicy Bypass -File .\REBUILD.ps1 -SeedOnly  # just re-run the seed
 ```
 
-The new Prisma migration is applied automatically on backend startup. **Do not run `docker compose down -v`** unless you intend to delete the old database.
+```bash
+# Linux / the cloud VM, from the repo root
+./scripts/rebuild.sh          # build + restart + seed + print catalogue counts
+./scripts/rebuild.sh --full   # --no-cache, use this when Docker refuses to pick up changes
+```
 
-This update was syntax checked but NOT fully integration-tested here because Docker and npm packages are unavailable in this workspace. Run `docker compose -f docker-compose.test.yml up --build --abort-on-container-exit --exit-code-from backend-test` on your machine before evaluation.
+Manual equivalent, in this exact order:
+
+```powershell
+docker compose down
+docker compose build --no-cache
+docker compose up -d
+docker compose exec backend npm run seed
+```
+
+Then hard-refresh the browser (`Ctrl+Shift+R`). Do **not** run `docker compose down -v` unless you want the database gone; the new Prisma migration is applied on backend startup and `docker-entrypoint.sh` auto-seeds an empty catalogue.
+
+**To replace the GitHub `cloud_project` contents with this project**, first test locally, then run `./SYNC_TO_GITHUB.ps1` from `D:\cc_project` and type `REPLACE`. It force-with-lease replaces the **main branch contents**, not the repository name.
 
 ## 1. Quick start
 
