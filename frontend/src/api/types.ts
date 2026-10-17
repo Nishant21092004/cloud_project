@@ -116,7 +116,32 @@ export interface CheckoutQuotePayload {
   quote: Quote;
 }
 
-export interface Serviceability { pincode: string; serviceable: boolean; deliveryFeePaise: number | null; city: string | null; demoCoverage?: boolean }
+export interface Serviceability {
+  pincode: string;
+  serviceable: boolean;
+  deliveryFeePaise: number | null;
+  city: string | null;
+  state: string | null;
+  circle: string | null;
+  etaDaysMin: number | null;
+  etaDaysMax: number | null;
+  demoCoverage?: boolean;
+  disabledByAdmin?: boolean;
+  hub?: boolean;
+  remote?: boolean;
+}
+
+/** Returned by every catalogue list call; drives the Out-of-stock search UX. */
+export interface CatalogMeta {
+  total: number;
+  returned: number;
+  unavailable?: {
+    term: string;
+    foundIn?: "flowers" | "bouquets" | "plants";
+    foundInName?: string;
+    similar: Array<{ slug: string; name: string; pricePaise: number; inStock: boolean }>;
+  };
+}
 
 export interface AdminStats {
   ordersToday: number; totalOrders: number; deliveredCount: number; pendingPayments: number;
@@ -132,4 +157,24 @@ export interface AdminFlower extends Flower { }
 export interface AdminBouquet extends Bouquet { active: boolean; recipe?: CompositionLine[] }
 export interface AdminPlant extends Plant { active: boolean }
 
-export interface PaymentConfig { enabled: boolean; keyId: string | null }
+export interface PaymentConfig {
+  enabled: boolean;
+  keyId: string | null;
+  demoOnline?: { enabled: boolean; simulated: boolean; note?: string };
+  methods?: string[];
+}
+
+export interface DeliveryCircleRow {
+  firstDigit: string;
+  name: string;
+  states: string;
+  feePaise: number;
+  etaDaysMin: number;
+  etaDaysMax: number;
+  cities: Array<{ prefix: string; city: string; state: string }>;
+}
+
+export interface DeliveryCoverage {
+  circles: DeliveryCircleRow[];
+  configuredPincodes: Array<{ pincode: string; city: string | null; deliveryFeePaise: number }>;
+}

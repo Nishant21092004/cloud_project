@@ -1,4 +1,4 @@
-import { fallbackImage } from "../lib/photos";
+import { MiniPhoto } from "../components/ProductImage";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { api } from "../api/client";
@@ -154,7 +154,7 @@ export function BuilderPage() {
                 return (
                   <div key={f.id} className={`rounded-2xl border p-3 transition ${n > 0 ? "border-forest-500 bg-forest-50/60" : "border-cream-300"} ${disabled ? "opacity-50" : ""}`}>
                     <div className="flex items-center gap-3">
-                      <img src={f.imageUrl} alt="" className="h-12 w-12 rounded-xl bg-cream-200 object-cover" onError={(e) => { e.currentTarget.src = fallbackImage("", "flower"); }} />
+                      <MiniPhoto slug={f.slug} name={f.name} image={f.imageUrl} kind="flower" colorHex={f.colorHex} className="h-12 w-12 rounded-xl" />
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-semibold">{f.name}</p>
                         <p className="text-xs text-forest-700/70">

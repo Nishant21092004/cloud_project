@@ -69,6 +69,10 @@ function ImagePicker({ url, onChange }: { url: string; onChange: (url: string) =
       )}
       <div className="flex-1">
         <input className="input" placeholder="/images/… or upload" value={url} onChange={(e) => onChange(e.target.value)} />
+        <p className="mt-1 text-[11px] leading-snug text-forest-700/60">
+          A <code>/uploads/…</code> or <code>/images/…</code> path is used exactly as-is on the storefront. Anything else (a seeded keyword
+          URL, for example) is only a fallback: the shop shows real species photographs from Wikimedia Commons and this field as backup.
+        </p>
         <label className="mt-1 inline-block cursor-pointer text-xs font-medium text-forest-600 hover:underline">
           {busy ? "Uploading…" : "Upload image (JPG/PNG/WebP, ≤5 MB)"}
           <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="hidden" onChange={(e) => pick(e.target.files?.[0])} />

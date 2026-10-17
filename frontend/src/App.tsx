@@ -16,6 +16,7 @@ import { RegisterPage } from "./pages/RegisterPage";
 import { OrdersPage } from "./pages/OrdersPage";
 import { OrderPage } from "./pages/OrderPage";
 import { NotFoundPage } from "./pages/NotFoundPage";
+import { DeliveryPage } from "./pages/DeliveryPage";
 
 import { AdminLayout } from "./pages/admin/AdminLayout";
 import { AdminDashboard } from "./pages/admin/AdminDashboard";
@@ -44,6 +45,7 @@ export default function App() {
           <Route path="/plants" element={<CatalogPage category="plants" />} />
           <Route path="/product/:slug" element={<ProductPage />} />
           <Route path="/builder" element={<BuilderPage />} />
+          <Route path="/delivery" element={<DeliveryPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/cart" element={<RequireAuth><CartPage /></RequireAuth>} />

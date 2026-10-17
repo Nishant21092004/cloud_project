@@ -3,6 +3,13 @@ import { useEffect, useState } from "react";
 import { api } from "../api/client";
 import type { Bouquet, Flower, Plant } from "../api/types";
 import { ProductCard, priceFor } from "../components/ProductCard";
+import { ProductImage, useGalleryForProduct } from "../components/ProductImage";
+
+/** The three doorway tiles use the same real-photography pipeline as the cards. */
+function CategoryPhoto({ name, kind }: { name: string; kind: "flower" | "plant" | "bouquet" }) {
+  const gallery = useGalleryForProduct(name.toLowerCase().replace(/\s+/g, "-"), name, "", kind, 1, true);
+  return <ProductImage sources={gallery.sources} alt={name} loading={gallery.loading} className="h-20 w-20 shrink-0" rounded="rounded-xl" />;
+}
 
 export function HomePage() {
   const [data, setData] = useState<{ bouquets: Bouquet[]; flowers: Flower[]; plants: Plant[] } | null>(null);
@@ -30,13 +37,20 @@ export function HomePage() {
             <span className="text-marigold-400">Build it your way.</span>
           </h1>
           <p className="mt-4 max-w-lg text-cream-100/90">
-            Loose stems from ₹10, ready-made bouquets, easy plants — or design your own bouquet petal by petal
-            with our builder and get it hand-tied the same day.
+            146 flower varieties and 193 plants — all with real photographs, not clip-art. Loose stems from ₹6,
+            ready bouquets, UPI/cards or cash on delivery, and India-wide delivery on any PIN code starting 1–8.
           </p>
           <div className="mt-7 flex flex-wrap gap-3">
             <Link to="/builder" className="btn bg-marigold-500 text-forest-900 hover:bg-marigold-400">Build a bouquet 🌸</Link>
             <Link to="/bouquets" className="btn border border-cream-50/40 text-cream-50 hover:bg-forest-700/60">Shop bouquets</Link>
+            <Link to="/delivery" className="btn btn-sm border border-cream-50/30 text-cream-100 hover:bg-forest-700/60">Check my PIN code</Link>
           </div>
+          <ul className="mt-6 flex flex-wrap gap-x-5 gap-y-1.5 text-xs text-cream-100/80">
+            <li>🚚 All-India delivery · 1–4 day metros</li>
+            <li>💵 COD + 📱 UPI / cards / netbanking</li>
+            <li>🌸 340+ species with photographs</li>
+            <li>🔎 Not listed? We show it as out of stock, never “no results”</li>
+          </ul>
         </div>
       </section>
 
@@ -44,13 +58,13 @@ export function HomePage() {
       <section className="mx-auto max-w-6xl px-4 py-12">
         <div className="grid gap-4 sm:grid-cols-3">
           {[
-            { to: "/flowers", title: "Flowers by stem", sub: "Roses from ₹30 · marigolds from ₹10", img: "/images/products/rose-red.svg" },
-            { to: "/bouquets", title: "Ready bouquets", sub: "Hand-tied, recipe-backed freshness", img: "/images/products/blush-romance.svg" },
-            { to: "/plants", title: "Plants & pots", sub: "From ₹99 with care guides", img: "/images/products/snake-plant.svg" },
+            { to: "/flowers", title: "Flowers by stem", sub: "146 varieties · roses from ₹30, genda from ₹6", name: "Red Hybrid Tea Rose", kind: "flower" as const },
+            { to: "/plants", title: "Plants & pots", sub: "193 species · care guide on every listing", name: "Money Plant (Golden Pothos)", kind: "plant" as const },
+            { to: "/bouquets", title: "Ready bouquets", sub: "Hand-tied recipes · price = stems + tying", name: "Blush Romance", kind: "bouquet" as const },
           ].map((c) => (
             <Link key={c.to} to={c.to} className="card group flex items-center gap-4 overflow-hidden p-4 transition hover:shadow-lift">
-              <img src={c.img} alt="" className="h-20 w-20 rounded-xl bg-cream-200 object-cover" />
-              <div>
+              <CategoryPhoto name={c.name} kind={c.kind} />
+              <div className="min-w-0">
                 <h3 className="font-semibold text-forest-900 group-hover:text-forest-700">{c.title}</h3>
                 <p className="mt-0.5 text-xs text-forest-700/70">{c.sub}</p>
               </div>
@@ -79,7 +93,7 @@ export function HomePage() {
             {data.flowers.map((f) => (
               <ProductCard key={f.id} slug={f.slug} name={f.name} image={f.imageUrl} kind="flower"
                 priceLabel={priceFor(f.pricePerStemPaise, "/ stem")} inStock={f.inStock}
-                accent={`${f.stockStems} in stock`} />
+                accent={`${f.stockStems} in stock`} colorHex={f.colorHex} />
             ))}
           </Section>
 

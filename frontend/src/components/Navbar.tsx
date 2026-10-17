@@ -24,6 +24,9 @@ export function Navbar() {
         <Link to="/" className="flex items-center gap-2">
           <img src="/images/logo.svg" alt="BloomNest" className="h-9 w-9 rounded-lg" />
           <span className="font-display text-xl font-semibold text-forest-800">BloomNest</span>
+          <span className="hidden shrink-0 rounded-full bg-marigold-500/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-marigold-600 lg:inline">
+            All-India delivery
+          </span>
         </Link>
 
         <nav className="hidden items-center gap-1 md:flex" aria-label="Main">
@@ -31,6 +34,7 @@ export function Navbar() {
           <NavLink to="/bouquets" className={linkCls}>Bouquets</NavLink>
           <NavLink to="/plants" className={linkCls}>Plants</NavLink>
           <NavLink to="/builder" className={linkCls}>Build a Bouquet</NavLink>
+          <NavLink to="/delivery" className={linkCls}>Delivery</NavLink>
         </nav>
 
         <div className="hidden items-center gap-2 md:flex">
@@ -65,6 +69,7 @@ export function Navbar() {
             <NavLink to="/bouquets" className={linkCls} onClick={() => setOpen(false)}>Bouquets</NavLink>
             <NavLink to="/plants" className={linkCls} onClick={() => setOpen(false)}>Plants</NavLink>
             <NavLink to="/builder" className={linkCls} onClick={() => setOpen(false)}>Build a Bouquet</NavLink>
+            <NavLink to="/delivery" className={linkCls} onClick={() => setOpen(false)}>Delivery &amp; payment</NavLink>
             {user ? (
               <>
                 {user.role === "ADMIN" && <Link to="/admin" className={linkCls({ isActive: false })} onClick={() => setOpen(false)}>Admin dashboard</Link>}

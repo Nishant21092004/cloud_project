@@ -1,12 +1,13 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api } from "../api/client";
-import type { Product } from "../api/types";
+import type { Flower, Plant, Product } from "../api/types";
 import { formatPaise } from "../lib/format";
 import { ErrorBox, IssueBanner, QtyStepper, Spinner } from "../components/ui";
+import { PhotoCredit, ProductImage, useGalleryForProduct } from "../components/ProductImage";
+import { ProductCard, priceFor } from "../components/ProductCard";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
-import { photoGallery, fallbackImage } from "../lib/photos";
 
 export function ProductPage() {
   const { slug } = useParams();
@@ -17,9 +18,11 @@ export function ProductPage() {
   const [error, setError] = useState<string | null>(null);
   const [qty, setQty] = useState(1);
   const [selectedPhoto, setSelectedPhoto] = useState(0);
+  const [lightbox, setLightbox] = useState(false);
   const [variantId, setVariantId] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [issues, setIssues] = useState<string[]>([]);
+  const [alternatives, setAlternatives] = useState<Flower[]>([]);
 
   useEffect(() => {
     setProduct(null);
@@ -33,12 +36,37 @@ export function ProductPage() {
           setVariantId(first?.id ?? null);
           setQty(1);
         }
+        // sold out → offer in-stock relatives instead of a dead end
+        if (!d.product.inStock) {
+          const word = d.product.name.split(" ").slice(-2).join(" ");
+          api<{ flowers: Flower[] }>(`/api/catalog/flowers?q=${encodeURIComponent(word)}&inStock=true&sort=price_asc`)
+            .then((r) => setAlternatives(r.flowers.filter((f) => f.slug !== d.product.slug).slice(0, 4)))
+            .catch(() => setAlternatives([]));
+        }
       })
       .catch((e) => setError(e.message));
   }, [slug]);
 
+  const gallery = useGalleryForProduct(
+    slug ?? "",
+    product?.name ?? "",
+    product?.imageUrl ?? "",
+    product?.type ?? "flower",
+    4,
+    !!product,
+    (product as { colorHex?: string } | null)?.colorHex,
+  );
+  const frames = gallery.sources;
+
+  const closeOnEscape = useCallback((e: KeyboardEvent) => { if (e.key === "Escape") setLightbox(false); }, []);
+  useEffect(() => {
+    if (!lightbox) return;
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [lightbox, closeOnEscape]);
+
   if (error) return <div className="mx-auto max-w-3xl px-4 py-10"><ErrorBox message={error} /></div>;
-  if (!product) return <Spinner />;
+  if (!product) return <Spinner label="Opening the product page…" />;
 
   const addToCart = async () => {
     if (!user) {
@@ -84,7 +112,6 @@ export function ProductPage() {
     : product.type === "bouquet" ? product.inStock
     : Boolean(variantId && product.variants.find((v) => v.id === variantId)?.inStock);
 
-  const photos = photoGallery(product.name, product.imageUrl, product.type);
   return (
     <div className="mx-auto max-w-5xl px-4 py-8">
       <nav className="mb-4 text-sm text-forest-600">
@@ -94,20 +121,43 @@ export function ProductPage() {
       </nav>
 
       <div className="grid gap-8 md:grid-cols-2">
+        {/* photography */}
         <div className="card overflow-hidden p-2">
-          <img src={photos[selectedPhoto]} alt={`${product.name} reference photo ${selectedPhoto + 1}`} className="aspect-square w-full rounded-xl object-cover"
-            onError={(e) => { const fallback = fallbackImage(product.imageUrl, product.type); if (!e.currentTarget.src.endsWith(fallback)) e.currentTarget.src = fallback; }} />
-          <div className="grid grid-cols-4 gap-2 p-2" aria-label="View four reference photographs">
-            {photos.map((src, index) => <button type="button" key={index} onClick={() => setSelectedPhoto(index)}
-              aria-label={`View image ${index + 1}`} aria-pressed={selectedPhoto === index}
-              className={`overflow-hidden rounded-lg border-2 ${selectedPhoto === index ? "border-forest-600" : "border-transparent"}`}>
-              <img src={src} alt="" loading="lazy" className="aspect-square w-full object-cover"
-                onError={(e) => { const fallback = fallbackImage(product.imageUrl, product.type); if (!e.currentTarget.src.endsWith(fallback)) e.currentTarget.src = fallback; }} />
-            </button>)}
+          <button
+            type="button"
+            onClick={() => frames.length > 0 && setLightbox(true)}
+            className="block w-full cursor-zoom-in text-left"
+            aria-label="Open larger photo"
+          >
+            <ProductImage
+              sources={[frames[selectedPhoto] ?? frames[0]]}
+              alt={`${product.name} — photograph ${selectedPhoto + 1}`}
+              loading={gallery.loading}
+              className="aspect-square w-full"
+              imgClassName="transition duration-500 hover:scale-[1.02]"
+            />
+          </button>
+
+          <div className="grid grid-cols-4 gap-2 p-2" aria-label={`${frames.length} photographs of ${product.name}`}>
+            {frames.map((src, index) => (
+              <button key={`${src}-${index}`} type="button" onClick={() => setSelectedPhoto(index)}
+                aria-label={`View image ${index + 1}`} aria-pressed={selectedPhoto === index}
+                className={`overflow-hidden rounded-lg border-2 transition ${selectedPhoto === index ? "border-forest-600" : "border-transparent hover:border-forest-300"}`}>
+                <img src={src} alt="" loading="lazy" className="aspect-square w-full object-cover"
+                  onError={(e) => { e.currentTarget.style.opacity = "0.3"; }} />
+              </button>
+            ))}
           </div>
-          <p className="px-2 pb-2 text-xs text-forest-700/60">Reference photographs are illustrative; the exact cultivar may vary.</p>
+
+          <div className="flex items-end justify-between gap-3 px-2 pb-2">
+            <PhotoCredit photo={gallery.meta[selectedPhoto]} />
+            <p className="text-[10px] leading-snug text-forest-700/50">
+              {gallery.loading ? "Loading species photography…" : "Reference photographs of this species — the exact cultivar and bloom size vary with the farm cut."}
+            </p>
+          </div>
         </div>
 
+        {/* details */}
         <div>
           <div className="flex flex-wrap items-center gap-2">
             <span className="badge bg-forest-50 text-forest-700">
@@ -150,10 +200,22 @@ export function ProductPage() {
           <div className="mt-6 flex flex-wrap items-center gap-4">
             <QtyStepper value={qty} max={maxQty} onChange={setQty} />
             <button className="btn-primary" disabled={!canAdd || adding} onClick={addToCart}>
-              {adding ? "Adding…" : canAdd ? "Add to cart" : "Unavailable"}
+              {adding ? "Adding…" : canAdd ? "Add to cart" : "Out of stock"}
             </button>
             <Link to="/builder" className="btn-ghost">or build your own bouquet →</Link>
           </div>
+
+          {!product.inStock && alternatives.length > 0 && (
+            <div className="mt-6">
+              <p className="label">In stock, closest to this</p>
+              <div className="grid grid-cols-2 gap-3">
+                {alternatives.map((f) => (
+                  <ProductCard key={f.id} slug={f.slug} name={f.name} image={f.imageUrl} kind="flower"
+                    priceLabel={priceFor(f.pricePerStemPaise, "/ stem")} inStock={f.inStock} colorHex={f.colorHex} />
+                ))}
+              </div>
+            </div>
+          )}
 
           {issues.length > 0 && <div className="mt-4"><IssueBanner issues={issues} /></div>}
 
@@ -162,8 +224,30 @@ export function ProductPage() {
               {product.stockStems} stems in stock right now · stock lives at the stem level, exactly like the warehouse.
             </p>
           )}
+
+          <p className="mt-4 rounded-xl bg-cream-200/60 px-3.5 py-2.5 text-xs text-forest-800">
+            🚚 We deliver across India (PIN codes 1–8) · 📱 UPI / card / netbanking or 💵 cash on delivery — see{" "}
+            <Link to="/delivery" className="font-semibold underline">delivery &amp; payment</Link>.
+          </p>
         </div>
       </div>
+
+      {lightbox && (
+        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-forest-900/85 p-4" role="dialog" aria-modal="true" aria-label={`${product.name} photographs`} onClick={() => setLightbox(false)}>
+          <div className="max-h-[80vh] w-full max-w-2xl" onClick={(e) => e.stopPropagation()}>
+            <img src={frames[selectedPhoto] ?? frames[0]} alt={product.name} className="mx-auto max-h-[72vh] w-auto rounded-xl object-contain" />
+            <div className="mt-3 flex items-center justify-between gap-3 text-cream-50">
+              <PhotoCredit photo={gallery.meta[selectedPhoto]} className="!text-cream-200/70" />
+              <div className="flex items-center gap-2">
+                <button className="btn btn-sm border border-cream-50/40 text-cream-50 hover:bg-forest-700" onClick={() => setSelectedPhoto((p) => (p - 1 + frames.length) % frames.length)}>←</button>
+                <span className="text-xs tabular-nums">{selectedPhoto + 1} / {frames.length}</span>
+                <button className="btn btn-sm border border-cream-50/40 text-cream-50 hover:bg-forest-700" onClick={() => setSelectedPhoto((p) => (p + 1) % frames.length)}>→</button>
+                <button className="btn btn-sm bg-cream-50 text-forest-900" onClick={() => setLightbox(false)}>Close</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
