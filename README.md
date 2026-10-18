@@ -63,7 +63,18 @@ Then hard-refresh the browser (`Ctrl+Shift+R`). Do **not** run `docker compose d
 
 Prerequisite: only **Docker** (Docker Desktop on Windows / Docker Engine on Linux). Node.js is not needed on the host.
 
-### Windows PowerShell
+### Windows PowerShell — fresh clone (nothing to copy by hand)
+
+```powershell
+git clone --branch arena/7e25f80e-cloud-project https://github.com/Nishant21092004/cloud_project.git D:\bloomnest
+cd D:\bloomnest
+powershell -ExecutionPolicy Bypass -File .\START.ps1
+```
+
+`START.ps1` creates `.env` with random secrets (a clone has none — secrets are not committed),
+takes a free host port if 80 is busy, gives the folder its own compose project so it cannot
+collide with an existing checkout's volumes, then builds, starts, waits for `/health/ready`,
+seeds the catalogue and prints the product counts. See [HOW_TO_RUN.md](HOW_TO_RUN.md).
 
 ```powershell
 # 1. Get the code (or clone your repo)

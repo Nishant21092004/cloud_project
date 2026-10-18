@@ -28,8 +28,15 @@ Set-Location -Path $PSScriptRoot
 function Step($msg) { Write-Host "`n==> $msg" -ForegroundColor Green }
 function Warn($msg) { Write-Host "!!! $msg" -ForegroundColor Yellow }
 
+# A folder may pin its own compose project in .env (START.ps1 writes that line when
+# several checkouts share one machine); `-p` is what actually wins.
+$script:ProjectArgs = @()
+if (Test-Path .env) {
+  $line = Select-String -Path .env -Pattern '^\s*COMPOSE_PROJECT_NAME=\s*(\S+)' | Select-Object -First 1
+  if ($line) { $script:ProjectArgs = @("-p", $line.Matches[0].Groups[1].Value) }
+}
 function Invoke-Compose([string[]]$ComposeArgs) {
-  & docker compose @ComposeArgs
+  & docker compose @script:ProjectArgs @ComposeArgs
   if ($LASTEXITCODE -ne 0) { throw "docker compose $($ComposeArgs -join ' ') failed (exit $LASTEXITCODE)" }
 }
 
@@ -62,7 +69,7 @@ $deadline = (Get-Date).AddSeconds(120)
 $ready = $false
 while ((Get-Date) -lt $deadline) {
   try {
-    & docker compose exec -T backend node -e "fetch('http://localhost:4000/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))" 2>$null | Out-Null
+    & docker compose @script:ProjectArgs exec -T backend node -e "fetch('http://localhost:4000/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))" 2>$null | Out-Null
     if ($LASTEXITCODE -eq 0) { $ready = $true; break }
   } catch { }
   Start-Sleep -Seconds 3
@@ -79,7 +86,7 @@ if ($Seed -or $Full) {
 
 Step "Current catalogue"
 try {
-  $count = & docker compose exec -T backend node -e "const{PrismaClient}=require('@prisma/client');const p=new PrismaClient();Promise.all([p.flower.count(),p.plant.count(),p.bouquet.count()]).then(r=>{console.log('flowers='+r[0]+' plants='+r[1]+' bouquets='+r[2]);process.exit(0)})" 2>$null
+  $count = & docker compose @script:ProjectArgs exec -T backend node -e "const{PrismaClient}=require('@prisma/client');const p=new PrismaClient();Promise.all([p.flower.count(),p.plant.count(),p.bouquet.count()]).then(r=>{console.log('flowers='+r[0]+' plants='+r[1]+' bouquets='+r[2]);process.exit(0)})" 2>$null
   if ($count) { Write-Host $count }
 } catch { Warn "Could not read counts." }
 

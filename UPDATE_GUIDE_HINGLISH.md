@@ -17,35 +17,30 @@ poora India, aur **Place order** jo actually chale.
 | Delivery sirf Delhi | Ab **poora India** — PIN ka pehla digit 1–8 ho to serviceable (metro hub sasta, north-east/remote mehnga, ₹39 floor), `0…`/`9…` refuse. `/delivery` page par state-wise list. Admin ke PIN rows hamesha override karte hain |
 | Place order dab hi nahi raha tha | Button ab **disabled hone ka karan** button ke neeche list karta hai (adhoori address, cart khaali, price badal gaya, slot expire). Ek baar sab sahi → order banega, idempotency key ke saath, aur usi order par redirect hoga (pehle "latest order" dhoondhne ki galat koshish hoti thi) |
 
-## 2. `D:\cc_project` me changes kaise lagayein
+## 2. Sabse saaf tareeqa: GitHub se naya folder (copy-paste ki zaroorat nahi)
 
-Sabse aasan — repo root se ek command:
-
-```powershell
-cd D:\cc_project
-powershell -ExecutionPolicy Bypass -File .\REBUILD.ps1 -Seed
-```
-
-`REBUILD.ps1` build karta hai, stack restart karta hai, `/health/ready` ka wait karta
-hai, seed chalata hai, aur ant me bataata hai ki DB me kitne products hain.
-`-SeedOnly` = sirf dobara seed (jab aap `backend/prisma/data/*` badlein).
-`-Full` = `--no-cache` rebuild (Docker purani cache kha raha ho tab).
-
-Manual tareeqa, yahi order follow karein:
+Aapka `D:\cc_project` purani copy hai (usme na `REBUILD.ps1` hai, na naya catalogue) —
+isi liye `.\REBUILD.ps1` "does not exist" bol raha tha. Naya folder bana lo:
 
 ```powershell
-docker compose down
-docker compose build --no-cache
-docker compose up -d
-docker compose exec backend npm run seed
+git clone --branch arena/7e25f80e-cloud-project https://github.com/Nishant21092004/cloud_project.git D:\bloomnest
+cd D:\bloomnest
+powershell -ExecutionPolicy Bypass -File .\START.ps1
 ```
 
-Uske baad browser me **Ctrl+Shift+R** (hard refresh) — purana bundle cache me atak
-jata hai, isliye aksar "kuch change nahi dikha" wali shikayat yahin hoti hai.
+`START.ps1` apne aap karta hai:
+- `.env` banaata hai + random `POSTGRES_PASSWORD` / `JWT_SECRET` daalta hai (GitHub par secret push nahi karte, isliye clone me `.env` nahi hota)
+- port 80 busy ho to 8080 (ya next free) use karta hai
+- aapke purane `D:\cc_project` stack ke volumes se takraane se bachata hai (is folder ka apna `COMPOSE_PROJECT_NAME`), **kuch delete nahi hota**
+- build → up → `/health/ready` wait → seed, aur ant me counts print karta hai: `flowers=146 plants=193 pot-variants=498 bouquets=24 serviceable-PINs=18`
 
-`.env` aur Docker volumes ko haath mat lagana: seed idempotent hai, aapke
-manually badle hue price/stock/upload kiye photos ko overwrite **nahi** karta.
-`docker compose down -v` se database delete ho jayega — wo mat karna.
+Repo private hai to clone par GitHub login ayega. Login nahi karna ho to browser me ZIP kholo:
+`https://github.com/Nishant21092004/cloud_project/archive/refs/heads/arena/7e25f80e-cloud-project.zip`
+→ extract → us folder me `START.ps1` chalao. Bas.
+
+Dusra din `git pull` ke baad: `powershell -ExecutionPolicy Bypass -File .\REBUILD.ps1 -Seed`.
+
+**Purana folder:** naya chal jaye tab `D:\cc_project` ko `D:\cc_project_old` karke rakh do (ya `docker compose down` — data volume safe rahega). Sirf tab `docker compose down -v` ya `docker volume rm bloomnest_db_data` karna jab purana database sach me delete karna ho.
 
 ## 3. Browser me verify karne ki checklist
 

@@ -15,6 +15,35 @@ Windows — only **Docker Desktop**.
 
 ---
 
+## 0.1 Naya folder, seedha GitHub se (recommended — no copying)
+
+Aapko purane folder me files copy karne ki zaroorat nahi. Ek khaali folder me clone karo
+aur ek script chala do — `.env`, secrets, build, migrations, seed sab khud ho jayenge:
+
+```powershell
+git clone --branch arena/7e25f80e-cloud-project https://github.com/Nishant21092004/cloud_project.git D:\bloomnest
+cd D:\bloomnest
+powershell -ExecutionPolicy Bypass -File .\START.ps1
+```
+
+`START.ps1` kya karta hai:
+1. `.env` banaata hai (`.env.example` se) aur usme **random** `POSTGRES_PASSWORD` + `JWT_SECRET` daalta hai — GitHub par secret push nahi hota, isliye clone me `.env` hota hi nahi.
+2. Port 80 busy ho (purana `D:\cc_project` stack chal raha ho) to apne aap `8080` (ya next free) le leta hai aur bataata hai.
+3. Purane stack ke Docker volumes se takraav na ho isliye is folder ko apna `COMPOSE_PROJECT_NAME` de deta hai — **dono folders apna-alag database**, koi data delete nahi hota.
+4. `docker compose build` + `up -d`, phir `/health/ready` ka wait (container "up" hai != API ready), phir `npm run seed`.
+5. Ant me print: `flowers=146 plants=193 pot-variants=498 bouquets=24 serviceable-PINs=18` + kholne ka URL.
+
+Repo private hai, to clone par GitHub login maangega (browser window / Git Credential Manager
+ya Personal Access Token). Login ka jhanjhat nahi chahiye to browser me ZIP download karo:
+
+```
+https://github.com/Nishant21092004/cloud_project/archive/refs/heads/arena/7e25f80e-cloud-project.zip
+```
+
+ZIP extract karke jo folder milega usme `START.ps1` chalao — bas, kaam khatam.
+
+Dusra din, code badalne ke baad: `powershell -ExecutionPolicy Bypass -File .\REBUILD.ps1 -Seed`.
+
 ## 1. First run — 4 commands
 
 Open **PowerShell**:
