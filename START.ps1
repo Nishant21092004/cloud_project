@@ -161,7 +161,9 @@ if (-not $projectName) {
     Say "To reuse the old database instead: delete the COMPOSE_PROJECT_NAME line from .env and use the same POSTGRES_PASSWORD as that folder's .env"
   } else {
     $projectName = $pinned
-    Say ("No competing stack found - using the default project '" + $pinned + "'")
+    Add-Content .env "`n# written by START.ps1 so this folder always talks to its own volumes"
+    Set-EnvValue "COMPOSE_PROJECT_NAME" $projectName
+    Say ("No competing stack found - using the default project '" + $pinned + "' (remembered in .env)")
   }
 } else {
   Say ("Project '" + $projectName + "' from .env - reusing this folder's own volumes and data")
