@@ -36,11 +36,33 @@ function Get-EnvValue([string]$Name) {
   return ""
 }
 
+# Windows PowerShell 5.1 turns a native command's stderr into an error record while
+# $ErrorActionPreference is Stop. Docker Desktop writes harmless notes to stderr
+# ("WARNING: No blkio throttle.read_bps_device support"), so every docker call runs
+# with the preference relaxed and is judged by its exit code instead of by what it
+# printed. Without this the whole script dies on a perfectly healthy Docker.
+function Run-Tool {
+  param([string[]]$ToolArgs, [switch]$Capture)
+  $previous = $ErrorActionPreference
+  $script:ToolExit = 0
+  $script:ToolOut = ""
+  try {
+    $ErrorActionPreference = "Continue"
+    if ($Capture) {
+      $script:ToolOut = ((& docker @ToolArgs 2>$null) -join "`n")
+    } else {
+      & docker @ToolArgs
+    }
+    $script:ToolExit = $LASTEXITCODE
+  } finally {
+    $ErrorActionPreference = $previous
+  }
+}
 function Run-Compose {
   param([string[]]$ComposeArgs)
   $cmd = @("compose") + @($ProjectArgs) + @($ComposeArgs)
-  & docker @cmd
-  if ($LASTEXITCODE -ne 0) { throw ("docker " + ($cmd -join " ") + " failed (exit " + $LASTEXITCODE + ")") }
+  Run-Tool -ToolArgs $cmd
+  if ($script:ToolExit -ne 0) { throw ("docker " + ($cmd -join " ") + " failed (exit " + $script:ToolExit + ")") }
 }
 
 # A folder may pin its own compose project (START.ps1 writes that line when several

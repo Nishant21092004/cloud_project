@@ -34,16 +34,33 @@ function Step([string]$Message) { Write-Host ""; Write-Host ("==> " + $Message) 
 function Warn([string]$Message) { Write-Host ("!!! " + $Message) -ForegroundColor Yellow }
 function Say([string]$Message)  { Write-Host ("    " + $Message) -ForegroundColor DarkGray }
 
-function Run-Compose {
-  param([string[]]$ComposeArgs, [switch]$Quiet)
-  $cmd = @("compose") + @($ProjectArgs) + @($ComposeArgs)
-  if ($Quiet) {
-    $null = & docker @cmd 2>&1
-    return $LASTEXITCODE
+# Windows PowerShell 5.1 turns a native command's stderr into an error record while
+# $ErrorActionPreference is Stop. Docker Desktop writes harmless notes to stderr
+# ("WARNING: No blkio throttle.read_bps_device support"), so every docker call runs
+# with the preference relaxed and is judged by its exit code instead of by what it
+# printed. Without this the whole script dies on a perfectly healthy Docker.
+function Run-Tool {
+  param([string[]]$ToolArgs, [switch]$Capture)
+  $previous = $ErrorActionPreference
+  $script:ToolExit = 0
+  $script:ToolOut = ""
+  try {
+    $ErrorActionPreference = "Continue"
+    if ($Capture) {
+      $script:ToolOut = ((& docker @ToolArgs 2>$null) -join "`n")
+    } else {
+      & docker @ToolArgs
+    }
+    $script:ToolExit = $LASTEXITCODE
+  } finally {
+    $ErrorActionPreference = $previous
   }
-  & docker @cmd
-  if ($LASTEXITCODE -ne 0) { throw ("docker " + ($cmd -join " ") + " failed (exit " + $LASTEXITCODE + ")") }
-  return 0
+}
+function Run-Compose {
+  param([string[]]$ComposeArgs)
+  $cmd = @("compose") + @($ProjectArgs) + @($ComposeArgs)
+  Run-Tool -ToolArgs $cmd
+  if ($script:ToolExit -ne 0) { throw ("docker " + ($cmd -join " ") + " failed (exit " + $script:ToolExit + ")") }
 }
 
 function New-HexSecret([int]$Bytes) {
@@ -92,12 +109,11 @@ if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
   Warn "docker is not on PATH. Install Docker Desktop, start it, then run this script again."
   exit 1
 }
-$null = & docker info 2>&1
-if ($LASTEXITCODE -ne 0) {
+Run-Tool -ToolArgs @("info", "-f", "Docker engine {{.ServerVersion}}")
+if ($script:ToolExit -ne 0) {
   Warn "Docker is installed but the daemon is not answering. Start Docker Desktop and wait until it says 'Docker Desktop is running'."
   exit 1
 }
-Say ("docker " + (& docker --version))
 
 Step "Environment file"
 if (-not (Test-Path .env)) {
@@ -125,7 +141,8 @@ if (Test-Path docker-compose.yml) {
   }
 }
 $projectName = Get-EnvValue "COMPOSE_PROJECT_NAME"
-$otherVolume = (& docker volume ls -q -f ('name=^' + $pinned + '_db_data$') 2>$null | Select-Object -First 1)
+Run-Tool -ToolArgs (@("volume", "ls", "-q", "-f", ('name=^' + $pinned + '_db_data$'))) -Capture
+$otherVolume = @($script:ToolOut -split "`n" | Where-Object { $_ }) | Select-Object -First 1
 
 # Does another *folder* already run the pinned stack? docker compose ls reports each
 # running project's compose file, which tells us whether that volume is ours or a
@@ -136,7 +153,8 @@ function Normalize-Path([string]$Value) {
 }
 $mine = Normalize-Path $PSScriptRoot
 $foreignStack = $false
-$listed = ((& docker compose ls --format json 2>$null) -join " ")
+Run-Tool -ToolArgs @("compose", "ls", "--format", "json") -Capture
+$listed = $script:ToolOut
 if ($listed) {
   try {
     foreach ($running in ($listed | ConvertFrom-Json)) {
