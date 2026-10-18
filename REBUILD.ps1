@@ -1,20 +1,17 @@
-<#
-  REBUILD.ps1 — one command to pick up catalogue / code changes in D:\cc_project.
+﻿# REBUILD.ps1 - pick up code or catalogue changes in an existing checkout.
+#
+#   powershell -ExecutionPolicy Bypass -File .\REBUILD.ps1             # build + restart
+#   powershell -ExecutionPolicy Bypass -File .\REBUILD.ps1 -Seed       # ...and re-seed
+#   powershell -ExecutionPolicy Bypass -File .\REBUILD.ps1 -SeedOnly   # just re-seed
+#   powershell -ExecutionPolicy Bypass -File .\REBUILD.ps1 -Full       # --no-cache, slowest
+#
+# Why this exists: the usual "I changed it but the site is the same" is either a
+# stale image or a seed that never ran. This does build -> restart -> wait for the
+# API -> seed -> print what is actually in the database, in that order.
+#
+# Pure ASCII on purpose: Windows PowerShell 5.1 reads .ps1 as ANSI without a UTF-8
+# BOM, so an em-dash or a curly quote in this file would break string parsing.
 
-  Why this exists: docker-compose.bind mounts the source into the container, so a
-  *data* change still needs a re-seed, and any backend change needs `prisma
-  generate` + a rebuild of the image. Doing it by hand in the wrong order is the
-  number one cause of "I changed the code but the site still shows the old stuff".
-
-  Usage (from D:\cc_project):
-    powershell -ExecutionPolicy Bypass -File .\REBUILD.ps1
-    powershell -ExecutionPolicy Bypass -File .\REBUILD.ps1 -Seed    # rebuild + re-seed
-    powershell -ExecutionPolicy Bypass -File .\REBUILD.ps1 -SeedOnly
-    powershell -ExecutionPolicy Bypass -File .\REBUILD.ps1 -Full    # --no-cache, slowest, always correct
-
-  -SeedOnly skips the image build: use it after editing prisma/data/* or running
-  the catalogue seed, which is the common case while you are tuning flowers/plants.
-#>
 [CmdletBinding()]
 param(
   [switch]$Seed,
@@ -25,20 +22,39 @@ param(
 $ErrorActionPreference = "Stop"
 Set-Location -Path $PSScriptRoot
 
-function Step($msg) { Write-Host "`n==> $msg" -ForegroundColor Green }
-function Warn($msg) { Write-Host "!!! $msg" -ForegroundColor Yellow }
+$ProjectArgs = @()
 
-# A folder may pin its own compose project in .env (START.ps1 writes that line when
-# several checkouts share one machine); `-p` is what actually wins.
-$script:ProjectArgs = @()
-if (Test-Path .env) {
-  $line = Select-String -Path .env -Pattern '^\s*COMPOSE_PROJECT_NAME=\s*(\S+)' | Select-Object -First 1
-  if ($line) { $script:ProjectArgs = @("-p", $line.Matches[0].Groups[1].Value) }
+function Step([string]$Message) { Write-Host ""; Write-Host ("==> " + $Message) -ForegroundColor Green }
+function Warn([string]$Message) { Write-Host ("!!! " + $Message) -ForegroundColor Yellow }
+function Say([string]$Message)  { Write-Host ("    " + $Message) -ForegroundColor DarkGray }
+
+function Get-EnvValue([string]$Name) {
+  if (-not (Test-Path .env)) { return "" }
+  foreach ($line in (Get-Content .env)) {
+    if ($line -match ('^\s*' + [regex]::Escape($Name) + '\s*=\s*(.*)$')) { return $matches[1].Trim() }
+  }
+  return ""
 }
-function Invoke-Compose([string[]]$ComposeArgs) {
-  & docker compose @script:ProjectArgs @ComposeArgs
-  if ($LASTEXITCODE -ne 0) { throw "docker compose $($ComposeArgs -join ' ') failed (exit $LASTEXITCODE)" }
+
+function Run-Compose {
+  param([string[]]$ComposeArgs)
+  $cmd = @("compose") + @($ProjectArgs) + @($ComposeArgs)
+  & docker @cmd
+  if ($LASTEXITCODE -ne 0) { throw ("docker " + ($cmd -join " ") + " failed (exit " + $LASTEXITCODE + ")") }
 }
+
+# A folder may pin its own compose project (START.ps1 writes that line when several
+# checkouts share one machine); -p is what definitively wins over "name:" in the file.
+$projectName = Get-EnvValue "COMPOSE_PROJECT_NAME"
+if ($projectName) {
+  $ProjectArgs = @("-p", $projectName)
+  Say ("compose project: " + $projectName)
+}
+
+$webPort = 80
+$rawPort = Get-EnvValue "WEB_PORT"
+if ($rawPort -match '^\d+$') { $webPort = [int]$rawPort }
+$baseUrl = "http://localhost:" + $webPort
 
 if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
   Warn "Docker was not found on PATH. Start Docker Desktop, then run this script again."
@@ -47,50 +63,69 @@ if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
 
 if ($SeedOnly) {
   Step "Re-seeding the catalogue (no image rebuild)"
-  Invoke-Compose @("exec", "-T", "backend", "npm", "run", "seed")
-  Step "Done — hard-refresh the browser (Ctrl+Shift+R)"
+  Run-Compose -ComposeArgs @("exec", "-T", "backend", "npm", "run", "seed")
+  Step "Done - hard-refresh the browser (Ctrl+Shift+R)"
   exit 0
 }
 
 if ($Full) {
-  Step "Full rebuild with --no-cache (this pulls a fresh npm install, be patient)"
-  Invoke-Compose @("build", "--no-cache")
+  Step "Full rebuild with --no-cache (reinstalls dependencies, be patient)"
+  Run-Compose -ComposeArgs @("build", "--no-cache")
 } else {
-  Step "Building images"
-  Invoke-Compose @("build")
+  Step "Building the images"
+  Run-Compose -ComposeArgs @("build")
 }
 
 Step "Restarting the stack"
-Invoke-Compose @("down")
-Invoke-Compose @("up", "-d")
+Run-Compose -ComposeArgs @("down")
+Run-Compose -ComposeArgs @("up", "-d")
 
-Step "Waiting for the API to answer /health/ready"
-$deadline = (Get-Date).AddSeconds(120)
-$ready = $false
-while ((Get-Date) -lt $deadline) {
+Step "Waiting for the API to answer through Nginx"
+$apiUp = $false
+for ($try = 1; $try -le 60; $try++) {
   try {
-    & docker compose @script:ProjectArgs exec -T backend node -e "fetch('http://localhost:4000/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))" 2>$null | Out-Null
-    if ($LASTEXITCODE -eq 0) { $ready = $true; break }
-  } catch { }
-  Start-Sleep -Seconds 3
+    $probe = Invoke-RestMethod -Uri ($baseUrl + "/api/catalog/flowers") -TimeoutSec 5
+    if ($null -ne $probe.meta) { $apiUp = $true; break }
+  } catch {
+    # 502 while the backend container is still starting is normal
+  }
+  Start-Sleep -Seconds 4
 }
-if (-not $ready) { Warn "API did not report ready within 120s — check: docker compose logs --tail=80 backend" }
+if (-not $apiUp) {
+  $projectFlag = ""
+  if ($projectName) { $projectFlag = "-p " + $projectName + " " }
+  Warn "The API did not answer in time. Check the log, then re-run:"
+  Say ("docker compose " + $projectFlag + "logs --tail=100 backend")
+  exit 1
+}
+Say "API is serving the catalogue"
 
 if ($Seed -or $Full) {
-  Step "Seeding flowers / plants / bouquets / delivery pincodes"
-  Invoke-Compose @("exec", "-T", "backend", "npm", "run", "seed")
+  Step "Seeding flowers, plants, bouquets and PIN codes"
+  Run-Compose -ComposeArgs @("exec", "-T", "backend", "npm", "run", "seed")
 } else {
   Step "Note"
-  Write-Host "Skipped seeding. If you changed backend/prisma/data/*, run:  .\REBUILD.ps1 -SeedOnly" -ForegroundColor DarkGray
+  Say "seeding skipped - after editing backend/prisma/data run: .\REBUILD.ps1 -SeedOnly"
 }
 
-Step "Current catalogue"
+Step "What the shop is serving right now"
 try {
-  $count = & docker compose @script:ProjectArgs exec -T backend node -e "const{PrismaClient}=require('@prisma/client');const p=new PrismaClient();Promise.all([p.flower.count(),p.plant.count(),p.bouquet.count()]).then(r=>{console.log('flowers='+r[0]+' plants='+r[1]+' bouquets='+r[2]);process.exit(0)})" 2>$null
-  if ($count) { Write-Host $count }
-} catch { Warn "Could not read counts." }
+  $f = Invoke-RestMethod -Uri ($baseUrl + "/api/catalog/flowers") -TimeoutSec 15
+  $p = Invoke-RestMethod -Uri ($baseUrl + "/api/catalog/plants") -TimeoutSec 15
+  $b = Invoke-RestMethod -Uri ($baseUrl + "/api/catalog/bouquets") -TimeoutSec 15
+  $c = Invoke-RestMethod -Uri ($baseUrl + "/api/catalog/delivery-coverage") -TimeoutSec 15
+  $pins = 0
+  if ($c.configuredPincodes) { $pins = @($c.configuredPincodes).Count }
+  Write-Host ("    flowers=" + $f.meta.total + "  plants=" + $p.meta.total + "  bouquets=" + $b.meta.total + "  configured-PINs=" + $pins)
+} catch {
+  Say ("could not read the counts: " + $_.Exception.Message)
+}
 
-$port = if ($env:WEB_PORT) { $env:WEB_PORT } else { "80" }
-Step "Open http://localhost:$port/flowers and hover a card"
-Write-Host "Photos come from Wikimedia Commons at view time, so the browser needs internet." -ForegroundColor DarkGray
-Write-Host "Test login: demo@bloomnest.test / Demo@1234  ·  admin@bloomnest.test / Admin@1234" -ForegroundColor DarkGray
+Step "Done"
+Write-Host ("    store     " + $baseUrl + "/flowers      (hover a card for the photo strip)") -ForegroundColor Cyan
+Write-Host ("    out-stock " + $baseUrl + "/flowers?q=unicorn+daisy") -ForegroundColor Cyan
+Write-Host ("    delivery  " + $baseUrl + "/delivery") -ForegroundColor Cyan
+Write-Host ("    admin     " + $baseUrl + "/admin") -ForegroundColor Cyan
+Say "Hard-refresh the browser once (Ctrl+Shift+R)."
+Say "Photos come from Wikimedia Commons at view time, so the browser needs internet."
+Say "Test logins: demo@bloomnest.test / Demo@1234   and   admin@bloomnest.test / Admin@1234"

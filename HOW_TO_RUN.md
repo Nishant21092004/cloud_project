@@ -44,6 +44,11 @@ ZIP extract karke jo folder milega usme `START.ps1` chalao — bas, kaam khatam.
 
 Dusra din, code badalne ke baad: `powershell -ExecutionPolicy Bypass -File .\REBUILD.ps1 -Seed`.
 
+Agar `START.ps1` parse error de (``Unexpected token '}'`` jaisa kuch): aapke paas script ki purani
+copy hai. `cd <folder>` → `git pull` → dobara chalao. Ye isliye hota hai kyunki Windows PowerShell 5.1
+`.ps1` file ko UTF-8 BOM ke bina ANSI padhta hai — em-dash (`—`) ke bytes curly quote ban jaate hain
+aur string kabhi band nahi hoti. Repo ke `.ps1` files isliye ASCII + BOM me rakhe gaye hain.
+
 ## 1. First run — 4 commands
 
 Open **PowerShell**:

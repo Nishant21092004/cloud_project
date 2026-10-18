@@ -1,22 +1,23 @@
-<#
-  START.ps1 — run BloomNest straight from a fresh git clone.
+﻿# START.ps1 - run BloomNest straight from a fresh GitHub clone.
+#
+# Handles the four things that break a first run:
+#   1. a clone has no .env (secrets are not committed) -> creates one with random values
+#   2. port 80 is often held by another checkout       -> picks a free port
+#   3. docker-compose.yml pins "name: bloomnest", so every folder would share ONE
+#      database volume (and then fail with "password authentication failed")
+#                                                       -> gives this folder its own project
+#   4. "container is up" is not "site works"            -> waits for the real API, then seeds
+#
+# Usage, from inside the cloned folder:
+#   powershell -ExecutionPolicy Bypass -File .\START.ps1
+#   powershell -ExecutionPolicy Bypass -File .\START.ps1 -Port 8080
+#   powershell -ExecutionPolicy Bypass -File .\START.ps1 -NoSeed
+#   powershell -ExecutionPolicy Bypass -File .\START.ps1 -SkipBuild
+#
+# Nothing in here deletes data. This file is pure ASCII on purpose: Windows
+# PowerShell 5.1 reads .ps1 files as ANSI unless they carry a UTF-8 BOM, so a
+# single em-dash or curly quote silently breaks string parsing.
 
-  Does everything a first run needs, in the right order:
-    1. creates .env from .env.example with a random DB password + JWT secret
-       (a clone never contains .env — secrets are not committed)
-    2. picks a free host port if 80 is already taken by another stack
-    3. builds and starts db + backend + web
-    4. waits until the API really answers /health/ready (not just "container up")
-    5. seeds flowers / plants / bouquets / PIN codes and prints the counts
-
-  Usage, from inside the cloned folder:
-    powershell -ExecutionPolicy Bypass -File .\START.ps1
-    powershell -ExecutionPolicy Bypass -File .\START.ps1 -Port 8080
-    powershell -ExecutionPolicy Bypass -File .\START.ps1 -NoSeed     # start only
-
-  Nothing here deletes data. `-NoSeed` plus the compose commands below is all you
-  need day to day; see REBUILD.ps1 when you pull new code.
-#>
 [CmdletBinding()]
 param(
   [int]$Port = 0,
@@ -27,153 +28,230 @@ param(
 $ErrorActionPreference = "Stop"
 Set-Location -Path $PSScriptRoot
 
-function Step($msg) { Write-Host "`n==> $msg" -ForegroundColor Green }
-function Warn($msg) { Write-Host "!!! $msg" -ForegroundColor Yellow }
-function Say($msg)  { Write-Host "    $msg" -ForegroundColor DarkGray }
+$ProjectArgs = @()
 
-# $script:ProjectArgs is filled once the compose project is known; `-p` beats both
-# the `name:` key in docker-compose.yml and COMPOSE_PROJECT_NAME, so there is no
-# ambiguity about which volumes a folder owns.
-$script:ProjectArgs = @()
-function Invoke-Compose([string[]]$ComposeArgs) {
-  & docker compose @script:ProjectArgs @ComposeArgs
-  if ($LASTEXITCODE -ne 0) { throw "docker compose $($ComposeArgs -join ' ') failed (exit $LASTEXITCODE)" }
-}
-function Invoke-ComposeQuiet([string[]]$ComposeArgs) {
-  & docker compose @script:ProjectArgs @ComposeArgs 2>$null | Out-Null
-  return $LASTEXITCODE
+function Step([string]$Message) { Write-Host ""; Write-Host ("==> " + $Message) -ForegroundColor Green }
+function Warn([string]$Message) { Write-Host ("!!! " + $Message) -ForegroundColor Yellow }
+function Say([string]$Message)  { Write-Host ("    " + $Message) -ForegroundColor DarkGray }
+
+function Run-Compose {
+  param([string[]]$ComposeArgs, [switch]$Quiet)
+  $cmd = @("compose") + @($ProjectArgs) + @($ComposeArgs)
+  if ($Quiet) {
+    $null = & docker @cmd 2>&1
+    return $LASTEXITCODE
+  }
+  & docker @cmd
+  if ($LASTEXITCODE -ne 0) { throw ("docker " + ($cmd -join " ") + " failed (exit " + $LASTEXITCODE + ")") }
+  return 0
 }
 
-function New-Secret([int]$bytes) {
-  $buf = New-Object byte[] $bytes
-  [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($buf)
-  -join ($buf | ForEach-Object { $_.ToString("x2") })
+function New-HexSecret([int]$Bytes) {
+  $buffer = New-Object byte[] $Bytes
+  $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+  $rng.GetBytes($buffer)
+  $builder = New-Object System.Text.StringBuilder
+  foreach ($b in $buffer) { $null = $builder.Append($b.ToString("x2")) }
+  return $builder.ToString()
+}
+
+function Set-EnvValue([string]$Name, [string]$Value) {
+  $lines = Get-Content .env
+  $found = $false
+  $out = @()
+  foreach ($line in $lines) {
+    if ($line -match ('^\s*' + [regex]::Escape($Name) + '\s*=')) {
+      $out += ($Name + "=" + $Value)
+      $found = $true
+    } else {
+      $out += $line
+    }
+  }
+  if (-not $found) { $out += ($Name + "=" + $Value) }
+  Set-Content .env -Value $out -Encoding ASCII
+}
+
+function Get-EnvValue([string]$Name) {
+  foreach ($line in (Get-Content .env)) {
+    if ($line -match ('^\s*' + [regex]::Escape($Name) + '\s*=\s*(.*)$')) { return $matches[1].Trim() }
+  }
+  return ""
+}
+
+function Test-PortBusy([int]$Number) {
+  try {
+    $listener = Get-NetTCPConnection -LocalPort $Number -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1
+    return [bool]$listener
+  } catch {
+    return $false
+  }
 }
 
 Step "Checking Docker"
 if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
-  Warn "Docker is not on PATH. Install Docker Desktop from docker.com, start it, then run this script again."
+  Warn "docker is not on PATH. Install Docker Desktop, start it, then run this script again."
   exit 1
 }
-& docker info *> $null
+$null = & docker info 2>&1
 if ($LASTEXITCODE -ne 0) {
-  Warn "Docker is installed but the daemon is not running — start Docker Desktop and wait for 'Docker Desktop is running'."
+  Warn "Docker is installed but the daemon is not answering. Start Docker Desktop and wait until it says 'Docker Desktop is running'."
   exit 1
 }
-Say "docker $(docker --version)"
+Say ("docker " + (& docker --version))
 
 Step "Environment file"
 if (-not (Test-Path .env)) {
-  if (-not (Test-Path .env.example)) { throw ".env.example is missing — this does not look like a complete checkout." }
+  if (-not (Test-Path .env.example)) { throw ".env.example is missing - this does not look like a complete checkout." }
   Copy-Item .env.example .env
-  $pg  = New-Secret 16
-  $jwt = New-Secret 32
-  $text = Get-Content .env -Raw
-  $text = $text -replace '(?m)^POSTGRES_PASSWORD=.*$', "POSTGRES_PASSWORD=$pg"
-  $text = $text -replace '(?m)^DATABASE_URL=postgresql://bloomnest:[^@]*@', "DATABASE_URL=postgresql://bloomnest:$pg@"
-  $text = $text -replace '(?m)^JWT_SECRET=.*$', "JWT_SECRET=$jwt"
-  Set-Content .env -Value $text -Encoding ascii
-  Say ".env created with a random database password + JWT secret. Never commit this file."
+  $dbPassword = New-HexSecret 16
+  $jwtSecret = New-HexSecret 32
+  Set-EnvValue "POSTGRES_PASSWORD" $dbPassword
+  Set-EnvValue "JWT_SECRET" $jwtSecret
+  $dbUser = Get-EnvValue "POSTGRES_USER"
+  $dbName = Get-EnvValue "POSTGRES_DB"
+  if (-not $dbUser) { $dbUser = "bloomnest" }
+  if (-not $dbName) { $dbName = "bloomnest" }
+  Set-EnvValue "DATABASE_URL" ("postgresql://" + $dbUser + ":" + $dbPassword + "@db:5432/" + $dbName)
+  Say ".env created with a random database password and JWT secret. Never commit .env."
 } else {
-  Say ".env already exists — left untouched (existing database password and Razorpay keys stay as they are)"
+  Say ".env already exists and was left alone (your database password and Razorpay keys stay as they are)"
 }
 
-# docker-compose.yml pins `name: bloomnest`, so *any* folder would otherwise share
-# the same volumes: a fresh clone would either inherit the old database or die with
-# "password authentication failed" (new random password, data directory written by
-# the old .env). Give this checkout its own compose project when a stack already exists.
-Step "Picking this folder's compose project"
-$composeText = if (Test-Path docker-compose.yml) { Get-Content docker-compose.yml -Raw } else { "" }
-$pinnedName = if ($composeText -match '(?m)^name:\s*(\S+)') { $matches[1] } else { "bloomnest" }
-$envText = Get-Content .env -Raw
-$projectName = if ($envText -match '(?m)^COMPOSE_PROJECT_NAME=(.*)$') { $matches[1].Trim() } else { "" }
-$oldVolume = & docker volume ls -q -f "name=^${pinnedName}_db_data$" 2>$null | Select-Object -First 1
+Step "Choosing the compose project for this folder"
+$pinned = "bloomnest"
+if (Test-Path docker-compose.yml) {
+  foreach ($line in (Get-Content docker-compose.yml)) {
+    if ($line -match '^name:\s*(\S+)') { $pinned = $matches[1]; break }
+  }
+}
+$projectName = Get-EnvValue "COMPOSE_PROJECT_NAME"
+$otherVolume = (& docker volume ls -q -f ('name=^' + $pinned + '_db_data$') 2>$null | Select-Object -First 1)
+
+# Does another *folder* already run the pinned stack? docker compose ls reports each
+# running project's compose file, which tells us whether that volume is ours or a
+# neighbour's. Falling back to the volume check keeps this working on old Docker.
+function Normalize-Path([string]$Value) {
+  if (-not $Value) { return "" }
+  return ($Value -replace "[\\/]", "").ToLower()
+}
+$mine = Normalize-Path $PSScriptRoot
+$foreignStack = $false
+$listed = ((& docker compose ls --format json 2>$null) -join " ")
+if ($listed) {
+  try {
+    foreach ($running in ($listed | ConvertFrom-Json)) {
+      if ($running.Name -eq $pinned -and -not ((Normalize-Path $running.ConfigFiles).Contains($mine))) { $foreignStack = $true }
+    }
+  } catch {
+    if ($otherVolume) { $foreignStack = $true }
+  }
+} elseif ($otherVolume) {
+  $foreignStack = $true
+}
+
 if (-not $projectName) {
-  if ($oldVolume) {
-    $leaf = (Split-Path -Leaf $PSScriptRoot).ToLower() -replace '[^a-z0-9_-]', ''
+  if ($foreignStack) {
+    $leaf = (Split-Path -Leaf $PSScriptRoot).ToLower()
+    $leaf = ($leaf -replace '[^a-z0-9_-]', '')
     if (-not $leaf -or $leaf -notmatch '^[a-z0-9]') { $leaf = "clone" }
-    $projectName = "${pinnedName}_$leaf"
-    Add-Content .env -Value "`n# Written by START.ps1: keeps this folder off the volumes D:\cc_project is using.`nCOMPOSE_PROJECT_NAME=$projectName"
-    Warn "A '$pinnedName' stack already exists ($oldVolume). This folder now uses project '$projectName' — its own database, old data untouched."
-    Say "To reuse the OLD database instead: delete the COMPOSE_PROJECT_NAME line from .env and set the same POSTGRES_PASSWORD as D:\cc_project\.env"
+    $projectName = $pinned + "_" + $leaf
+    Add-Content .env "`n# written by START.ps1 so this folder does not fight another checkout for the same volumes"
+    Set-EnvValue "COMPOSE_PROJECT_NAME" $projectName
+    Warn ("Another checkout already runs project '" + $pinned + "'. This folder now uses '" + $projectName + "' - its own database, nothing deleted.")
+    Say "To reuse the old database instead: delete the COMPOSE_PROJECT_NAME line from .env and use the same POSTGRES_PASSWORD as that folder's .env"
   } else {
-    $projectName = $pinnedName
-    Say "No other BloomNest volumes on this machine — using the default project '$pinnedName'"
+    $projectName = $pinned
+    Say ("No competing stack found - using the default project '" + $pinned + "'")
   }
 } else {
-  Say "Project '$projectName' (from .env) — reusing this folder's existing volumes and data"
+  Say ("Project '" + $projectName + "' from .env - reusing this folder's own volumes and data")
 }
-$script:ProjectArgs = @("-p", $projectName)
+$ProjectArgs = @("-p", $projectName)
 
-# Port: honour -Port, else keep whatever .env says, else find a free one.
-$envMap = @{}
-Get-Content .env | ForEach-Object {
-  if ($_ -match '^\s*([A-Z_]+)\s*=\s*(.*)$') { $envMap[$matches[1]] = $matches[2].Trim() }
-}
-$currentPort = if ($envMap["WEB_PORT"]) { [int]$envMap["WEB_PORT"] } else { 80 }
-$wanted = if ($Port -gt 0) { $Port } else { $currentPort }
-
-function Test-PortBusy([int]$p) {
-  try { return [bool](Get-NetTCPConnection -LocalPort $p -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1) }
-  catch { return $false }
-}
-
-if (Test-PortBusy $wanted) {
-  $alt = if ($wanted -eq 80) { 8080 } else { $wanted + 1 }
-  while (Test-PortBusy $alt) { $alt++ }
-  Warn "Port $wanted is already in use (probably your old D:\cc_project stack is still running). Using $alt instead."
-  $text = (Get-Content .env -Raw) -replace '(?m)^WEB_PORT=.*$', "WEB_PORT=$alt"
-  Set-Content .env -Value $text -Encoding ascii
-  $wanted = $alt
-  Say "To free port 80 later:  cd D:\cc_project ; docker compose down"
+Step "Picking a host port"
+$envPort = 80
+$raw = Get-EnvValue "WEB_PORT"
+if ($raw -match '^\d+$') { $envPort = [int]$raw }
+$target = $envPort
+if ($Port -gt 0) { $target = $Port }
+if (Test-PortBusy $target) {
+  $alt = $target + 1
+  if ($target -eq 80) { $alt = 8080 }
+  while (Test-PortBusy $alt) { $alt = $alt + 1 }
+  Warn ("Port " + $target + " is busy (probably the other checkout's stack). Using " + $alt + " instead.")
+  $target = $alt
+  Set-EnvValue "WEB_PORT" ([string]$target)
 } else {
-  $text = (Get-Content .env -Raw) -replace '(?m)^WEB_PORT=.*$', "WEB_PORT=$wanted"
-  Set-Content .env -Value $text -Encoding ascii
+  Set-EnvValue "WEB_PORT" ([string]$target)
 }
-Say "web port: $wanted"
+$baseUrl = "http://localhost:" + $target
+Say ("web port " + $target)
 
 if ($SkipBuild) {
   Step "Starting the stack (build skipped)"
-  Invoke-Compose @("up", "-d")
+  Run-Compose -ComposeArgs @("up", "-d")
 } else {
-  Step "Building the images — first run downloads base images, expect 3-8 minutes"
-  Invoke-Compose @("build")
+  Step "Building the images - the first run also pulls base images, expect 3 to 8 minutes"
+  Run-Compose -ComposeArgs @("build")
   Step "Starting db + backend + web"
-  Invoke-Compose @("up", "-d")
+  Run-Compose -ComposeArgs @("up", "-d")
 }
 
-Step "Waiting for the API to report ready"
-$ready = $false
-$deadline = (Get-Date).AddSeconds(240)
-while ((Get-Date) -lt $deadline) {
-  if ((Invoke-ComposeQuiet @("exec", "-T", "backend", "node", "-e", "fetch('http://localhost:4000/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))")) -eq 0) { $ready = $true; break }
-  Start-Sleep -Seconds 4
+Step "Waiting for the API to answer through Nginx"
+$apiUp = $false
+for ($try = 1; $try -le 60; $try++) {
+  try {
+    $probe = Invoke-RestMethod -Uri ($baseUrl + "/api/catalog/flowers") -TimeoutSec 5
+    if ($null -ne $probe.meta) { $apiUp = $true; break }
+  } catch {
+    # 502 from Nginx while the API is still booting is expected here
+  }
+  if (-not $apiUp) { Start-Sleep -Seconds 4 }
 }
-if (-not $ready) {
-  Warn "The API did not become ready in time. Read the log, then re-run:  docker compose logs --tail=100 backend"
+if (-not $apiUp) {
+  Warn "The API did not answer in 4 minutes. Read the log, fix, then re-run this script:"
+  Say ("docker compose -p " + $projectName + " logs --tail=100 backend")
+  Say ("docker compose -p " + $projectName + " ps")
   exit 1
 }
-Say "API healthy"
-$usedVolumes = & docker volume ls -q --filter "name=${projectName}_db_data" 2>$null
-if ($usedVolumes) { Say "this folder owns: $(($usedVolumes | ForEach-Object { $_.Trim() }) -join ', ')" }
-else { Say "no ${projectName}_db_data volume yet — it is created on first start" }
+Say "API is serving the catalogue"
 
 if (-not $NoSeed) {
-  Step "Seeding the catalogue"
-  Invoke-Compose @("exec", "-T", "backend", "npm", "run", "seed")
+  Step "Seeding flowers, plants, bouquets, slots and PIN codes"
+  Run-Compose -ComposeArgs @("exec", "-T", "backend", "npm", "run", "seed")
 }
 
-Step "What is in the database now"
-& docker compose @script:ProjectArgs exec -T backend node -e "const{PrismaClient}=require('@prisma/client');const p=new PrismaClient();Promise.all([p.flower.count(),p.plant.count(),p.plantVariant.count(),p.bouquet.count(),p.serviceablePincode.count()]).then(r=>{console.log('    flowers='+r[0]+'  plants='+r[1]+'  pot-variants='+r[2]+'  bouquets='+r[3]+'  serviceable-PINs='+r[4]);process.exit(0)}).catch(e=>{console.log('    could not read counts: '+e.message);process.exit(0)})"
+Step "What the shop is serving right now"
+$flowers = 0
+$plants = 0
+$bouquets = 0
+$pins = 0
+try {
+  $f = Invoke-RestMethod -Uri ($baseUrl + "/api/catalog/flowers") -TimeoutSec 15
+  $p = Invoke-RestMethod -Uri ($baseUrl + "/api/catalog/plants") -TimeoutSec 15
+  $b = Invoke-RestMethod -Uri ($baseUrl + "/api/catalog/bouquets") -TimeoutSec 15
+  $c = Invoke-RestMethod -Uri ($baseUrl + "/api/catalog/delivery-coverage") -TimeoutSec 15
+  if ($f.meta.total) { $flowers = $f.meta.total }
+  if ($p.meta.total) { $plants = $p.meta.total }
+  if ($b.meta.total) { $bouquets = $b.meta.total }
+  if ($c.configuredPincodes) { $pins = @($c.configuredPincodes).Count }
+  Say ("flowers=" + $flowers + "  plants=" + $plants + "  bouquets=" + $bouquets + "  configured-PINs=" + $pins)
+  if ($flowers -lt 100 -and -not $NoSeed) {
+    Warn ("fewer than 100 flowers - the seed may not have run. Try: docker compose -p " + $projectName + " exec backend npm run seed")
+  }
+} catch {
+  Say ("could not read the counts: " + $_.Exception.Message)
+}
 
-$url = "http://localhost:$wanted"
-Step "Open the shop"
-Write-Host "    store     $url/flowers" -ForegroundColor Cyan
-Write-Host "    delivery  $url/delivery" -ForegroundColor Cyan
-Write-Host "    admin     $url/admin   (admin@bloomnest.test / Admin@1234)" -ForegroundColor Cyan
-Write-Host "    customer  $url/login   (demo@bloomnest.test / Demo@1234)" -ForegroundColor Cyan
+Step "Open it"
+Write-Host ("    store     " + $baseUrl + "/flowers") -ForegroundColor Cyan
+Write-Host ("    delivery  " + $baseUrl + "/delivery") -ForegroundColor Cyan
+Write-Host ("    builder   " + $baseUrl + "/build") -ForegroundColor Cyan
+Write-Host ("    admin     " + $baseUrl + "/admin    admin@bloomnest.test / Admin@1234") -ForegroundColor Cyan
+Write-Host ("    customer  " + $baseUrl + "/login    demo@bloomnest.test / Demo@1234") -ForegroundColor Cyan
 Write-Host ""
-Say "Hard-refresh the browser once (Ctrl+Shift+R) so the new bundle is picked up."
-Say "Product photos are fetched from Wikimedia Commons by the browser, so this window needs internet."
-Say "Stop without deleting data: docker compose down      (NEVER 'down -v' — that wipes the database)"
-Say "After pulling new code:     powershell -ExecutionPolicy Bypass -File .\REBUILD.ps1 -Seed"
+Say "Hard-refresh the browser once (Ctrl+Shift+R) so the new bundle is used."
+Say "Product photos are fetched by the browser from Wikimedia Commons, so this window needs internet."
+Say ("Stop without deleting data:  docker compose -p " + $projectName + " down")
+Say "Never run 'down -v' unless you want the database gone."
+Say ("After a git pull:             powershell -ExecutionPolicy Bypass -File .\\REBUILD.ps1 -Seed")
