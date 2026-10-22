@@ -104,6 +104,22 @@ def strip_markup(text):
     return "".join(out)
 
 
+# ---------------------------------------------------------------- figure prep
+
+def pdf_figure(path, max_px=1250, quality=78):
+    """Return a downscaled JPEG copy of a figure for embedding in the PDF."""
+    from PIL import Image as PILImage
+    src = os.path.join(HERE, path)
+    out_dir = os.path.join(HERE, "figures", ".print")
+    os.makedirs(out_dir, exist_ok=True)
+    out = os.path.join(out_dir, os.path.splitext(os.path.basename(path))[0] + ".jpg")
+    im = PILImage.open(src).convert("RGB")
+    if im.width > max_px:
+        im = im.resize((max_px, round(im.height * max_px / im.width)), PILImage.LANCZOS)
+    im.save(out, "JPEG", quality=quality, optimize=True, progressive=True)
+    return out
+
+
 # ---------------------------------------------------------------- DOCX
 
 def build_docx(blocks):
@@ -248,7 +264,7 @@ def build_docx(blocks):
             p.paragraph_format.space_before = Pt(8)
             p.paragraph_format.space_after = Pt(4)
             p.paragraph_format.keep_with_next = True
-            p.add_run().add_picture(os.path.join(HERE, path), width=Inches(6.2))
+            p.add_run().add_picture(pdf_figure(path, max_px=1350, quality=82), width=Inches(6.2))
         elif kind == "table":
             table_no += 1
             rows = payload
@@ -399,7 +415,8 @@ def build_pdf(blocks):
         if kind == "fig":
             (alt, path), caption = payload
             from reportlab.lib.utils import ImageReader
-            iw, ih = ImageReader(os.path.join(HERE, path)).getSize()
+            img_path = pdf_figure(path)
+            iw, ih = ImageReader(img_path).getSize()
             w = FRAME_W * (0.94 if ("fig3" in path or "fig4" in path) else 1.0)
             h = w * ih / iw
             max_h = 5.2 * inch
@@ -408,7 +425,7 @@ def build_pdf(blocks):
                 w = h * iw / ih
             story.append(KeepTogether([
                 Spacer(1, 6),
-                Image(os.path.join(HERE, path), width=w, height=h),
+                Image(img_path, width=w, height=h),
                 mk(caption, cap),
             ]))
         elif kind == "h1":
@@ -439,14 +456,15 @@ def build_pdf(blocks):
         elif kind == "img":
             alt, path = payload
             from reportlab.lib.utils import ImageReader
-            iw, ih = ImageReader(os.path.join(HERE, path)).getSize()
+            img_path = pdf_figure(path)
+            iw, ih = ImageReader(img_path).getSize()
             w = FRAME_W * (0.94 if "fig3" in path or "fig4" in path else 1.0)
             h = w * ih / iw
             max_h = 5.2 * inch
             if h > max_h:
                 h = max_h
                 w = h * iw / ih
-            story.append(Image(os.path.join(HERE, path), width=w, height=h))
+            story.append(Image(img_path, width=w, height=h))
         elif kind == "tbl":
             caption, rows = payload
             ncols = max(len(r) for r in rows)
