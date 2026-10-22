@@ -1,9 +1,13 @@
 # XAI Driven Modality Bias Detection and Mitigation in Multimodal Deep Learning Models
 
 **Nishant (I24AI028)**
-Project team: I24AI001, I24AI009, I24AI026, I24AI028
+
+Project team: I24AI001   I24AI009   I24AI026   I24AI028
+
 Sardar Vallabhbhai National Institute of Technology, Surat
+
 Integrated Artificial Intelligence Program — Deep Learning Semester Project
+
 13 October 2026
 
 ---
@@ -20,7 +24,7 @@ What these numbers support is a task-dependent trade-off between balance and acc
 
 ---
 
-## 1. Introduction
+## 1 Introduction
 
 Some information exists in only one place. A photograph of a plate shows colour, texture and plating; the caption beside it supplies the name of the dish, which pixels alone may never reveal. Conversational emotion recognition splits the same way — the words carry semantic content, while an audio representation picks up vocal cues that the transcript loses. Combining the two should help. In practice a joint objective over two encoders guarantees no such thing, and one encoder can end up learning almost nothing useful while the reported accuracy stays high. The tension is easy to state and hard to measure.
 
@@ -32,7 +36,7 @@ The codebase splits accordingly. A notebook loads pretrained PaliGemma and visua
 
 So the paper describes an architecture, a controller, and an analysis of run evidence that already existed — favourable results and awkward ones side by side. Nothing was cherry-picked afterwards. Three things are contributed: diagnostic utilities wired into published modulation algorithms, a like-for-like comparison against several alternative learning strategies, and a reproducibility pass over the saved experiments. OPM, OGM and Integrated Gradients belong to their original authors. Nothing here is offered as a new optimisation algorithm.
 
-## 2. Background and Related Work
+## 2 Background and Related Work
 
 ### 2.1 Modality dominance and representation quality
 
@@ -52,7 +56,7 @@ PaliGemma pairs a SigLIP vision encoder with a Gemma language model and is desig
 
 Food-101 provides 101 categories and 101,000 images [6], with no natural text modality — so this project constructs prompts from labels, which gives a controlled shortcut setting rather than a realistic captioning one. MELD supplies conversational utterances from *Friends* with text, audio and visual modalities [7]. The evaluated MELD model uses text plus the released audio features over seven emotion labels. It never touches MELD video frames and does not model dialogue-level context.
 
-## 3. Study Scope and Data
+## 3 Study Scope and Data
 
 ### 3.1 Implemented components
 
@@ -88,7 +92,7 @@ A MELD input is an utterance's text plus one 300-dimensional released audio feat
 
 The pipeline joins text and audio features on dialogue and utterance identifiers, stores the vectors as NPZ files, and keeps split and source identifiers in CSV records so that any evaluated row can be traced back to the utterance it came from. Nothing exotic, and nothing hidden. Official split boundaries survive in the newer sample. Each utterance is classified independently, so relations across turns and speakers are outside the evaluated model.
 
-## 4. Methodology
+## 4 Methodology
 
 ### 4.1 Encoders and fusion
 
@@ -160,7 +164,7 @@ The notebook loads `google/paligemma-3b-pt-224` with eager attention, takes an u
 
 One could define an image attention fraction as image-token attention mass divided by the mass on a stated eligible input span — but the definition only means something once query positions, layers, heads, generated steps and special-token handling are all pinned down. A fraction of 0.5 is a descriptive midpoint and nothing more, since unequal token counts and differing task relevance make it a poor automatic fairness target. Half and half sounds fair. It rarely is. Any future Balanced Modal Attention gate must respect PaliGemma's actual architecture and be evaluated on its own terms.
 
-## 5. Experimental Design
+## 5 Experimental Design
 
 ### 5.1 Separate evaluation protocols
 
@@ -195,7 +199,7 @@ Accuracy is the share of correct predictions. Macro-F1 averages class F1 scores 
 
 For the matched tables, uncertainty is sample standard deviation over three training seeds; for the earlier tables it is population standard deviation, matching the repository's generator. Both measure seed-to-seed variability, and neither is a confidence interval. All 108 matched prediction files were checked by rebuilding their confusion matrices and recomputing accuracy and macro-F1. Validation-selected best epochs and the nine dataset–seed initialisation groups were checked too, and archive plus contained-file checksums matched their manifests. This analysis reuses saved evidence. No model was retrained for it. Reusing evidence is not the same as reproducing it.
 
-## 6. Results
+## 6 Results
 
 ### 6.1 Earlier three-seed benchmark
 
@@ -322,7 +326,7 @@ The independent saved live-demo runs use seed zero and the same small archives, 
 
 Figure 4 makes the point that modest aggregate movement can hide large class-specific errors. Thirty predictions, ten utterances, three models. Class-wise recall and macro-F1 will be necessary once the experiment moves to the full, naturally imbalanced MELD distribution.
 
-## 7. Discussion
+## 7 Discussion
 
 ### 7.1 Balance is a diagnostic, not a sufficient objective
 
@@ -342,7 +346,7 @@ Explanation and modulation answer related but distinct questions. An attention m
 
 Used with their limits in view, the diagnostics complement each other well. Exact head decomposition verifies the classifier's additive structure. Attribution can point at tokens or image regions that look spurious. Modality ablations test what happens when an input is removed. Task metrics then decide whether an intervention actually helped. Together those checks support a stronger argument than any single heatmap can.
 
-## 8. Limitations and Threats to Validity
+## 8 Limitations and Threats to Validity
 
 The small Food-101 and MELD archives plus five-epoch runs support a study of software and behaviour, not a full-dataset benchmark. The older full CSVs and media behind the larger saved runs are not part of the checkout. Their summaries and histories document outcomes that were recorded, but a faithful rerun would require recovering the exact split construction and source data. Recorded is not reproducible. The older Food-101 development split also draws examples from the official test partition, so its best validation accuracy is not an untouched final test estimate.
 
@@ -352,7 +356,7 @@ Three seeds say little about variability, and no significance test is claimed. G
 
 Finally, the PaliGemma notebook demonstrates attention extraction and contains educational model-building cells and interactive input steps. A clean benchmark would isolate the tested pretrained path, make image-token boundaries configurable, and run over a fixed dataset. Nothing here establishes completed BMA fine-tuning, VQAv2 accuracy, COCO caption scores, or a PaliGemma bias-reduction result.
 
-## 9. Future Work
+## 9 Future Work
 
 First priority is a prespecified held-out experiment on larger samples, with complete split manifests, more seeds, and a validation-only search over modulation strength, warmup and duration. A useful ablation would separate plain OGM from OGM-GE, vary the noise scope, compare OPM against fixed modality dropout, and contrast small with large text encoders. That is how we would learn whether the observed gains come from adaptation, from regularisation, or from the added noise.
 
@@ -360,7 +364,7 @@ For the explanation study, the next steps are matched before/after checkpoints o
 
 Extending any of this to PaliGemma needs a separate VQA or captioning protocol, token-aware diagnostics, and interventions that respect its vision encoder, projector and language decoder. A proposed BMA gate or attribution regulariser should be treated as a fresh experiment, with an unmodified model control and a clearly stated fine-tuning budget. Start there, not with a leaderboard. Imposing equal attention mass without evidence that it matches task needs would be the wrong instinct.
 
-## 10. Conclusion
+## 10 Conclusion
 
 What we have is a compact framework for looking at modality imbalance through three lenses: confidence monitoring, explanation utilities, and existing forward/backward training interventions. The saved experiments show that modulation can reduce the monitored discrepancy, and sometimes improve accuracy while doing so. They also contain clear counterexamples. The earlier MELD model grows more balanced as it loses accuracy. Ordinary dropout beats the modulation methods on the short synthetic study.
 

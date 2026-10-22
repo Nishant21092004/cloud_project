@@ -68,6 +68,15 @@ output of a commercial detector, and no claim is made that a specific tool will 
 a specific number. If you need a hard guarantee, run the output through the detector
 your institution uses before submitting.
 
+## Layout
+
+The PDF is rebuilt to match the original submission's formatting rather than a generic
+report style: US Letter, 57 pt margins, 11 pt serif body at 14.2 pt leading (Times
+metrics, same as the original's Liberation Serif), bold sans headings at 14 / 12 pt,
+9.5 pt tables and bold 9.5 pt captions, centred page numbers at the same position.
+Same margins, same column feel, same table grid. So it should look like the same
+document with different sentences — not a different template.
+
 ## Regenerating
 
 ```bash

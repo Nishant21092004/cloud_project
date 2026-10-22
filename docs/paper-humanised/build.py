@@ -312,6 +312,10 @@ def build_docx(blocks):
 # ---------------------------------------------------------------- PDF
 
 def build_pdf(blocks):
+    """Render the paper to PDF matching the original submission's layout:
+    Letter page, 57 pt margins, 11 pt serif body at 14.2 pt leading, sans
+    bold headings (14/12 pt), 9.5 pt tables and captions, centred page numbers.
+    """
     from reportlab.lib import colors
     from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY, TA_LEFT
     from reportlab.lib.pagesizes import letter
@@ -319,53 +323,74 @@ def build_pdf(blocks):
     from reportlab.lib.units import inch
     from reportlab.pdfbase import pdfmetrics
     from reportlab.pdfbase.ttfonts import TTFont
+    from reportlab.pdfgen import canvas as _canvas
     from reportlab.platypus import (
-        BaseDocTemplate, Frame, Image, KeepTogether, PageTemplate,
-        Paragraph, Spacer, Table, TableStyle, PageBreak,
+        BaseDocTemplate, CondPageBreak, Frame, Image, KeepTogether, PageTemplate,
+        Paragraph, Spacer, Table, TableStyle,
     )
 
     fd = "/usr/share/fonts/truetype/dejavu"
+    pdfmetrics.registerFont(TTFont("DJSans-Bold", os.path.join(fd, "DejaVuSans-Bold.ttf")))
     pdfmetrics.registerFont(TTFont("DJSerif", os.path.join(fd, "DejaVuSerif.ttf")))
     pdfmetrics.registerFont(TTFont("DJSerif-Bold", os.path.join(fd, "DejaVuSerif-Bold.ttf")))
-    pdfmetrics.registerFontFamily(
-        "DJSerif", normal="DJSerif", bold="DJSerif-Bold",
-        italic="DJSerif", boldItalic="DJSerif-Bold",
-    )
     pdfmetrics.registerFont(TTFont("DJMono", os.path.join(fd, "DejaVuSansMono.ttf")))
+    # Built-in Times is metrically identical to Liberation Serif, so line breaks
+    # land where they did in the original document.
+    pdfmetrics.registerFontFamily(
+        "Times-Roman", normal="Times-Roman", bold="Times-Bold",
+        italic="Times-Italic", boldItalic="Times-BoldItalic",
+    )
+
+    MARGIN = 57.0
+    PAGE_W, PAGE_H = letter
+    FRAME_W = PAGE_W - 2 * MARGIN
 
     body = ParagraphStyle(
-        "body", fontName="DJSerif", fontSize=9.6, leading=14.2,
-        alignment=TA_JUSTIFY, spaceAfter=7.0,
+        "body", fontName="Times-Roman", fontSize=11.0, leading=14.2,
+        alignment=TA_JUSTIFY, spaceAfter=7.2, firstLineIndent=0,
     )
     title = ParagraphStyle(
-        "title", parent=body, fontName="DJSerif-Bold", fontSize=16.5,
-        leading=22, alignment=TA_CENTER, spaceAfter=8,
+        "title", parent=body, fontName="DJSans-Bold", fontSize=17.6, leading=22.4,
+        alignment=TA_CENTER, spaceAfter=10,
     )
-    meta = ParagraphStyle("meta", parent=body, alignment=TA_CENTER, spaceAfter=1.5, fontSize=9.3)
+    meta = ParagraphStyle("meta", parent=body, fontSize=10.0, leading=13.4,
+                          alignment=TA_CENTER, spaceAfter=1.6)
+    metalast = ParagraphStyle("metalast", parent=meta, spaceAfter=10)
     h2 = ParagraphStyle(
-        "h2", parent=body, fontName="DJSerif-Bold", fontSize=12.6, leading=16,
-        alignment=TA_LEFT, spaceBefore=13, spaceAfter=5, keepWithNext=1,
+        "h2", parent=body, fontName="DJSans-Bold", fontSize=14.0, leading=18,
+        alignment=TA_LEFT, spaceBefore=15, spaceAfter=6,
     )
     h3 = ParagraphStyle(
-        "h3", parent=body, fontName="DJSerif-Bold", fontSize=10.6, leading=14,
-        alignment=TA_LEFT, spaceBefore=10, spaceAfter=3.5, keepWithNext=1,
+        "h3", parent=body, fontName="DJSans-Bold", fontSize=12.0, leading=15.6,
+        alignment=TA_LEFT, spaceBefore=11, spaceAfter=4,
     )
     h4 = ParagraphStyle(
-        "h4", parent=body, fontName="DJSerif-Bold", fontSize=9.9, leading=13,
-        alignment=TA_LEFT, spaceBefore=8, spaceAfter=3, keepWithNext=1,
+        "h4", parent=body, fontName="DJSans-Bold", fontSize=10.4, leading=13.6,
+        alignment=TA_LEFT, spaceBefore=8, spaceAfter=3,
     )
-    eq = ParagraphStyle("eq", parent=body, alignment=TA_CENTER, fontSize=9.3, spaceBefore=5, spaceAfter=9)
-    cap = ParagraphStyle("cap", parent=body, fontSize=8.6, leading=12.4, spaceBefore=3, spaceAfter=11)
+    eq = ParagraphStyle("eq", parent=body, fontName="DJSerif", alignment=TA_CENTER,
+                        fontSize=9.4, leading=13.6, spaceBefore=5, spaceAfter=9)
+    cap = ParagraphStyle("cap", parent=body, fontName="Times-Roman", fontSize=9.5,
+                         leading=12.6, spaceBefore=4, spaceAfter=11, alignment=TA_LEFT)
+    capcell = ParagraphStyle("capcell", parent=body, fontName="Times-Bold", fontSize=9.5,
+                             leading=12.6, alignment=TA_LEFT, spaceAfter=0)
     code = ParagraphStyle(
-        "code", parent=body, fontName="DJMono", fontSize=7.8, leading=11,
-        alignment=TA_LEFT, leftIndent=14, spaceAfter=10,
+        "code", parent=body, fontName="DJMono", fontSize=7.6, leading=11,
+        alignment=TA_LEFT, leftIndent=12, spaceAfter=10,
     )
-    cellh = ParagraphStyle("cellh", parent=body, fontName="DJSerif-Bold", fontSize=7.9, leading=10.6, alignment=TA_LEFT)
-    cell = ParagraphStyle("cell", parent=body, fontSize=7.9, leading=10.6, alignment=TA_LEFT)
+    cellh = ParagraphStyle("cellh", parent=body, fontName="Times-Bold", fontSize=9.5,
+                           leading=12.2, alignment=TA_LEFT)
+    cell = ParagraphStyle("cell", parent=body, fontName="Times-Roman", fontSize=9.5,
+                          leading=12.2, alignment=TA_LEFT)
     cellc = ParagraphStyle("cellc", parent=cell, alignment=TA_CENTER)
-    kw = ParagraphStyle("kw", parent=body, fontSize=9.2)
-    capcell = ParagraphStyle("capcell", parent=body, fontSize=8.6, leading=12.2,
-                             alignment=TA_LEFT, spaceAfter=0)
+    kw = ParagraphStyle("kw", parent=body, fontSize=10.0, leading=13.4)
+
+    def can_cp1252(ch):
+        try:
+            ch.encode("cp1252")
+            return True
+        except UnicodeEncodeError:
+            return False
 
     def esc(text):
         t = text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
@@ -374,17 +399,36 @@ def build_pdf(blocks):
             t = t.replace("&lt;/" + tag + "&gt;", "</" + tag + ">")
         return t
 
+    def fallback_glyphs(t):
+        """Wrap characters the built-in Times encoding cannot carry."""
+        out = []
+        inside_tag = False
+        for ch in t:
+            if ch == "<":
+                inside_tag = True
+            elif ch == ">":
+                inside_tag = False
+            if inside_tag or ch in "<>":
+                out.append(ch)
+                continue
+            if ch in "\n\t" or can_cp1252(ch):
+                out.append(ch)
+            else:
+                out.append('<font name="DJSerif">%s</font>' % ch)
+        return "".join(out)
+
     def mk(text, style):
         t = esc(text)
         t = re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", t)
         t = re.sub(r"(?<!\*)\*([^*]+?)\*(?!\*)", r"<i>\1</i>", t)
-        t = re.sub(r"`(.+?)`", r'<font name="DJMono" size="8.2">\1</font>', t)
+        t = re.sub(r"`(.+?)`", r'<font name="DJMono" size="8.4">\1</font>', t)
+        if style.fontName != "DJSerif":
+            t = fallback_glyphs(t)
         return Paragraph(t, style)
 
-    FRAME_W = letter[0] - 2 * inch
     story = []
 
-    # pre-merge image + caption pairs so they never split across pages
+    # pre-merge image/caption and caption/table pairs so they never split
     merged = []
     idx = 0
     while idx < len(blocks):
@@ -417,50 +461,56 @@ def build_pdf(blocks):
             from reportlab.lib.utils import ImageReader
             img_path = pdf_figure(path)
             iw, ih = ImageReader(img_path).getSize()
-            w = FRAME_W * (0.94 if ("fig3" in path or "fig4" in path) else 1.0)
+            factor = 0.80 if "fig2" in path else (0.86 if ("fig3" in path or "fig4" in path) else 0.92)
+            w = FRAME_W * factor
             h = w * ih / iw
-            max_h = 5.2 * inch
+            max_h = 4.4 * inch
             if h > max_h:
                 h = max_h
                 w = h * iw / ih
             story.append(KeepTogether([
-                Spacer(1, 6),
+                Spacer(1, 8),
                 Image(img_path, width=w, height=h),
                 mk(caption, cap),
             ]))
         elif kind == "h1":
             story.append(mk(payload, title))
         elif kind == "h2":
+            story.append(CondPageBreak(96))
             story.append(mk(payload, h2))
         elif kind == "h3":
+            story.append(CondPageBreak(84))
             story.append(mk(payload, h3))
         elif kind == "h4":
+            story.append(CondPageBreak(72))
             story.append(mk(payload, h4))
         elif kind == "hr":
-            story.append(Spacer(1, 6))
+            story.append(Spacer(1, 4))
         elif kind == "p":
-            if payload.startswith("**Table") or payload.startswith("**Figure"):
-                story.append(mk(payload, cap))
-            elif payload.startswith("**Keywords:**"):
+            if payload.startswith("**Keywords:**"):
                 story.append(mk(payload, kw))
             elif payload.startswith("**Nishant") or payload.startswith("Project team") \
-                    or payload.startswith("Sardar Vallabhbhai") or payload.startswith("Integrated Artificial"):
-                story.append(mk(payload, meta))
+                    or payload.startswith("Sardar Vallabhbhai") \
+                    or payload.startswith("Integrated Artificial") \
+                    or re.match(r"^\d{1,2} [A-Z][a-z]+ \d{4}$", payload):
+                last = bool(re.match(r"^\d{1,2} [A-Z][a-z]+ \d{4}$", payload))
+                story.append(mk(payload, metalast if last else meta))
             else:
                 story.append(mk(payload, body))
         elif kind == "eq":
             story.append(mk(payload, eq))
         elif kind == "code":
             lines = payload.split("\n")
-            story.append(Paragraph("<br/>".join(esc(l).replace(" ", "&nbsp;") for l in lines), code))
+            story.append(Paragraph(
+                "<br/>".join(esc(l).replace(" ", "&nbsp;") for l in lines), code))
         elif kind == "img":
             alt, path = payload
             from reportlab.lib.utils import ImageReader
             img_path = pdf_figure(path)
             iw, ih = ImageReader(img_path).getSize()
-            w = FRAME_W * (0.94 if "fig3" in path or "fig4" in path else 1.0)
+            w = FRAME_W * 0.98
             h = w * ih / iw
-            max_h = 5.2 * inch
+            max_h = 4.4 * inch
             if h > max_h:
                 h = max_h
                 w = h * iw / ih
@@ -495,7 +545,7 @@ def build_pdf(blocks):
                 ("BOTTOMPADDING", (0, 0), (-1, -1), 2.4),
                 ("BOTTOMPADDING", (0, 0), (-1, 0), 5),
             ]))
-            story.append(KeepTogether([Spacer(1, 6), t, Spacer(1, 10)]))
+            story.append(KeepTogether([Spacer(1, 5), t, Spacer(1, 10)]))
         elif kind == "table":
             rows = payload
             ncols = max(len(r) for r in rows)
@@ -507,7 +557,6 @@ def build_pdf(blocks):
                     st = cellh if ri == 0 else (cell if ci == 0 else cellc)
                     out.append(mk(txt, st))
                 data.append(out)
-            # column widths from content length
             weights = []
             for ci in range(ncols):
                 mx = max(len(strip_markup(r[ci])) if ci < len(r) else 1 for r in rows)
@@ -524,24 +573,22 @@ def build_pdf(blocks):
                 ("TOPPADDING", (0, 0), (-1, -1), 2.4),
                 ("BOTTOMPADDING", (0, 0), (-1, -1), 2.4),
             ]))
-            if len(rows) <= 15:
-                story.append(KeepTogether([Spacer(1, 3), t]))
-            else:
-                story.append(Spacer(1, 3))
-                story.append(t)
-            story.append(Spacer(1, 9))
+            story.append(KeepTogether([Spacer(1, 5), t, Spacer(1, 10)]))
 
     def on_page(canvas, doc):
         canvas.saveState()
-        canvas.setFont("DJSerif", 8.4)
-        canvas.drawCentredString(letter[0] / 2, 0.62 * inch, str(doc.page))
+        canvas.setFont("Times-Roman", 11)
+        canvas.drawCentredString(PAGE_W / 2, 0.62 * inch, str(doc.page))
         canvas.restoreState()
 
     doc = BaseDocTemplate(
         PDF_OUT, pagesize=letter,
-        leftMargin=inch, rightMargin=inch, topMargin=0.95 * inch, bottomMargin=0.95 * inch,
+        leftMargin=MARGIN, rightMargin=MARGIN,
+        topMargin=MARGIN, bottomMargin=MARGIN + 10,
         title="XAI Driven Modality Bias Detection and Mitigation in Multimodal Deep Learning Models",
         author="Nishant, I24AI028",
+        subject="Deep Learning Semester Project, SVNIT Surat",
+        creator="build.py",
     )
     frame = Frame(doc.leftMargin, doc.bottomMargin, doc.width, doc.height, id="f")
     doc.addPageTemplates([PageTemplate(id="p", frames=[frame], onPage=on_page)])
