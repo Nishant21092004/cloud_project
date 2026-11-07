@@ -24,6 +24,6 @@ Log in: customer `demo@bloomnest.test / Demo@1234`, admin `admin@bloomnest.test 
 
 Contingencies:
 
-- If they ask about online payment: open `/api/payments/config` → `{"enabled":false}` → "Razorpay test keys .env mein daalte hi checkout.js wala flow enable ho jata hai; uska poora verify/webhook path automated tests mein covered hai."
+- If they ask about online payment: open `/api/payments/config` → `{"enabled":true,"mode":"sandbox"}` → "Bina keys ke bhi online option chalta hai — sandbox simulator wahi PENDING→PAID state machine chalata hai, receipt aur timeline real hain, bas gateway demo hai. Razorpay test keys .env mein daalte hi wahi button asli checkout.js kholta hai; verify/webhook path automated tests mein covered hai."
 - If a page feels slow on first load: it's the container cold start; click again — assets are cached.
 - Never demo on `docker compose down -v` (that wipes the database).

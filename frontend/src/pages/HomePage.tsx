@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { api } from "../api/client";
 import type { Bouquet, Flower, Plant } from "../api/types";
 import { ProductCard, priceFor } from "../components/ProductCard";
+import { flowerGallery } from "../lib/gallery";
 
 export function HomePage() {
   const [data, setData] = useState<{ bouquets: Bouquet[]; flowers: Flower[]; plants: Plant[] } | null>(null);
@@ -44,9 +45,9 @@ export function HomePage() {
       <section className="mx-auto max-w-6xl px-4 py-12">
         <div className="grid gap-4 sm:grid-cols-3">
           {[
-            { to: "/flowers", title: "Flowers by stem", sub: "Roses from ₹30 · marigolds from ₹10", img: "/images/products/rose-red.svg" },
-            { to: "/bouquets", title: "Ready bouquets", sub: "Hand-tied, recipe-backed freshness", img: "/images/products/blush-romance.svg" },
-            { to: "/plants", title: "Plants & pots", sub: "From ₹99 with care guides", img: "/images/products/snake-plant.svg" },
+            { to: "/flowers", title: "Flowers by stem", sub: "Roses from ₹30 · marigolds from ₹10", img: "/images/products/rose-red.jpg" },
+            { to: "/bouquets", title: "Ready bouquets", sub: "Hand-tied, recipe-backed freshness", img: "/images/products/blush-romance.jpg" },
+            { to: "/plants", title: "Plants & pots", sub: "From ₹99 with care guides", img: "/images/products/snake-plant.jpg" },
           ].map((c) => (
             <Link key={c.to} to={c.to} className="card group flex items-center gap-4 overflow-hidden p-4 transition hover:shadow-lift">
               <img src={c.img} alt="" className="h-20 w-20 rounded-xl bg-cream-200 object-cover" />
@@ -69,7 +70,7 @@ export function HomePage() {
         <>
           <Section title="Bestsellers in bouquets" link="/bouquets">
             {data.bouquets.map((b) => (
-              <ProductCard key={b.id} slug={b.slug} name={b.name} image={b.imageUrl} kind="bouquet"
+              <ProductCard key={b.id} slug={b.slug} name={b.name} image={b.imageUrl}
                 priceLabel={priceFor(b.pricePaise)} inStock={b.inStock}
                 subtitle={b.composition.map((c) => c.name).join(" · ")} />
             ))}
@@ -77,7 +78,8 @@ export function HomePage() {
 
           <Section title="Pick your own stems" link="/flowers">
             {data.flowers.map((f) => (
-              <ProductCard key={f.id} slug={f.slug} name={f.name} image={f.imageUrl} kind="flower"
+              <ProductCard key={f.id} slug={f.slug} name={f.name} image={f.imageUrl}
+                gallery={flowerGallery(f.slug, data.flowers)}
                 priceLabel={priceFor(f.pricePerStemPaise, "/ stem")} inStock={f.inStock}
                 accent={`${f.stockStems} in stock`} />
             ))}
@@ -85,7 +87,7 @@ export function HomePage() {
 
           <Section title="Green friends" link="/plants">
             {data.plants.map((p) => (
-              <ProductCard key={p.id} slug={p.slug} name={p.name} image={p.imageUrl} kind="plant"
+              <ProductCard key={p.id} slug={p.slug} name={p.name} image={p.imageUrl}
                 priceLabel={p.priceFromPaise ? `From ${priceFor(p.priceFromPaise)}` : "Unavailable"} inStock={p.inStock}
                 subtitle={p.careWatering ? `💧 ${p.careWatering} · ☀️ ${p.careLight}` : undefined} />
             ))}

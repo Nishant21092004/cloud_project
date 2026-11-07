@@ -103,7 +103,7 @@ export interface Priced {
  */
 export async function checkoutFlow(
   a: ReturnType<typeof agent>,
-  opts: { paymentMethod?: "COD" | "RAZORPAY" | "DEMO_ONLINE"; idemKey?: string; address?: typeof ADDRESS } = {},
+  opts: { paymentMethod?: "COD" | "RAZORPAY"; idemKey?: string; address?: typeof ADDRESS } = {},
 ) {
   const q = await a.get("/api/orders/quote");
   const slot = await prisma.deliverySlot.findFirstOrThrow();

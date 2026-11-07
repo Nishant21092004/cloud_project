@@ -63,12 +63,13 @@ Builder rules enforced server-side: 6–50 total stems, ≤24 per flower, ≤8 v
 
 | Method | Path | Auth | Notes |
 |---|---|---|---|
-| GET | `/config` | — | `{enabled, keyId}` — frontend enables online payment only when `enabled` |
-| POST | `/razorpay/create` | session | `{orderNumber}` → gateway order id; **idempotent** (reuses existing) |
+| GET | `/config` | — | `{enabled, mode, keyId}` — `mode` is `"sandbox"` (built-in simulator, default) or `"razorpay"` (real test-mode keys configured); `keyId` is public and only non-null in razorpay mode |
+| POST | `/razorpay/create` | session | `{orderNumber}` → gateway order id; **idempotent** (reuses existing); 409 `SANDBOX_MODE` outside razorpay mode |
 | POST | `/razorpay/verify` | session | checkout.js callback `{orderNumber, razorpay_order_id, razorpay_payment_id, razorpay_signature}` — signature AND provider-capture verified; repeated calls → `{paid:true, already:true}`; after cancellation → 409 `PAYMENT_AFTER_CANCELLATION` (recorded LATE) |
 | POST | `/razorpay/webhook` | HMAC header | raw-body signature `x-razorpay-signature`; handles `payment.captured`, `order.paid`, `payment.failed`; duplicate deliveries → `{duplicate:true}` |
+| POST | `/sandbox/complete` | session | sandbox mode only: `{orderNumber}` → `{paid:true, orderNumber, mode:"sandbox"}` or `{paid:true, already:true, mode:"sandbox"}`; 409 `REAL_MODE` when real keys are active; same cancellations/expiry rules as `/verify` |
 
-An order is marked **PAID only after a verified confirmation**. No code path displays a completed refund that wasn't verified (REFUNDED is admin-set, only after REFUND_REQUESTED, with a note).
+An order is marked **PAID only after a verified confirmation**. In sandbox mode `/sandbox/complete` runs the **same guarded PENDING → PAID transition** (payment row `CAPTURED`, `PAYMENT_RECEIVED` timeline event), but every payment is stamped `pay_SANDBOX_…` and labelled "demo" in the UI, so it can never be confused with a real gateway capture. No code path displays a completed refund that wasn't verified (REFUNDED is admin-set, only after REFUND_REQUESTED, with a note).
 
 ## Admin — `/api/admin` (ADMIN role, enforced server-side)
 

@@ -96,9 +96,48 @@ step(
   done.order?.status === "DELIVERED" && done.order?.paymentStatus === "COD_COLLECTED" && done.order.events.length >= 5,
 );
 
-/* 7 ── customer isolation: another account cannot read this order */
+/* 7 ── online payment (sandbox mode drives the same PAID state machine) */
+const payCfg = await call("customer", "GET", "/api/payments/config");
+step("payment config reachable", payCfg.enabled === true && Boolean(payCfg.mode), payCfg.mode);
+
+let online = null;
+if (payCfg.mode === "sandbox") {
+  const add2 = await call("customer", "POST", "/api/cart/items", {
+    kind: "CUSTOM",
+    config: { flowers: [{ flowerId: f1.id, stems: 5 }, { flowerId: f2.id, stems: 3 }], wrappingId: wrap.id, ribbonId: ribbon.id },
+  });
+  step("second bouquet added for online order", add2.status === 201);
+
+  const idem2 = `e2e_${Date.now()}_pay`;
+  const first2 = await call("customer", "POST", "/api/orders", {
+    address, slotId: slots.slots[0].id, deliveryDate: tomorrow, paymentMethod: "RAZORPAY",
+    confirmPricing: (await call("customer", "GET", "/api/orders/quote")).quote,
+  }, { "Idempotency-Key": idem2 });
+  const created2 = first2.status === 201
+    ? first2
+    : await call("customer", "POST", "/api/orders", {
+        address, slotId: slots.slots[0].id, deliveryDate: tomorrow, paymentMethod: "RAZORPAY",
+        confirmPricing: first2.details?.quote,
+      }, { "Idempotency-Key": idem2 });
+  step("RAZORPAY order created", created2.status === 201, created2.order?.orderNumber);
+
+  const paid = await call("customer", "POST", "/api/payments/sandbox/complete", { orderNumber: created2.order?.orderNumber });
+  step("sandbox payment completes", paid.status === 200 && paid.paid === true, paid.mode);
+
+  const afterPay = await call("customer", "GET", `/api/orders/${created2.order?.orderNumber}`);
+  step("order is PAID after sandbox capture", afterPay.order?.paymentStatus === "PAID");
+
+  const cancel = await call("customer", "POST", `/api/orders/${created2.order?.orderNumber}/cancel`, { reason: "e2e refund check" });
+  step("paid cancellation → REFUND_REQUESTED (honest)", cancel.order?.paymentStatus === "REFUND_REQUESTED");
+  online = created2.order?.orderNumber;
+} else {
+  console.log("SKIP  sandbox payment steps — server has real Razorpay keys configured");
+}
+
+/* 8 ── customer isolation: another account cannot read this order */
 await call("stranger", "POST", "/api/auth/register", { name: "Stranger", email: `s_${email}`, password: "E2ePass@123" });
 const peek = await call("stranger", "GET", `/api/orders/${order.order.orderNumber}`);
 step("stranger denied access to the order", peek.status === 404);
 
 console.log(`\nORDER_NUMBER=${order.order?.orderNumber ?? "NONE"}`);
+if (online) console.log(`ONLINE_ORDER=${online}`);

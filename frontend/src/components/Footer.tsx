@@ -8,7 +8,7 @@ export function Footer() {
             <span className="font-display text-lg font-semibold text-cream-50">BloomNest</span>
           </div>
           <p className="mt-3 text-sm text-cream-200/80">
-            Farm-fresh flowers, hand-tied bouquets and easy-going plants — delivered across Delhi NCR.
+            Farm-fresh flowers, hand-tied bouquets and easy-going plants — delivered across India.
           </p>
         </div>
         <div className="text-sm">

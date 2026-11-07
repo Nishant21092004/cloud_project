@@ -38,13 +38,11 @@ enum OrderStatus {
 enum PaymentMethod {
   COD
   RAZORPAY
-  DEMO_ONLINE // simulated payment for classroom demos; never actual money
 }
 
 enum PaymentStatus {
   PENDING // online payment awaited
   PAID // verified payment received
-  DEMO_PAID // simulated online payment, NO actual money charged
   FAILED // gateway reported failure (retry possible until expiry)
   COD_PENDING // cash to be collected on delivery
   COD_COLLECTED // cash received

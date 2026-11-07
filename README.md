@@ -1,15 +1,16 @@
 # BloomNest — Flowers, Custom Bouquets & Plants 🌸
 
 A full-stack online flower & plant store for Indian customers, built as a cloud-computing course project.
-Custom bouquet builder, per-stem flower inventory, plant variants, COD + optional Razorpay (test mode),
-React storefront + admin dashboard, all running on Docker.
+112-product catalogue (56 flowers, 50 plants, 6 bouquets), custom bouquet builder, per-stem flower
+inventory, plant variants, pan-India delivery, COD + online payments (sandbox by default, Razorpay
+Test Mode with keys), React storefront + admin dashboard, all running on Docker.
 
 | Layer | Technology |
 |---|---|
 | Frontend | React 18, TypeScript, Vite, Tailwind CSS, Nginx (serves + reverse-proxies) |
 | Backend | Node.js 20, Express, TypeScript, Zod validation, JWT (httpOnly cookie) |
 | Database | PostgreSQL 16 + Prisma ORM (SQL migrations + seed) |
-| Payments | Cash on Delivery (always works) + Razorpay Test Mode (optional) |
+| Payments | Cash on Delivery + online payments (built-in sandbox simulator; real Razorpay Test Mode when keys are set) |
 | Deployment | Docker + Docker Compose, single Linux VM |
 
 **Demo accounts** (created by the seed script):
@@ -20,30 +21,6 @@ React storefront + admin dashboard, all running on Docker.
 | Customer | `demo@bloomnest.test` | `Demo@1234` |
 
 ---
-
-
-## BloomNest catalogue & checkout update (17 Oct 2026)
-
-- **152 demo products** after running `npm run seed`: **80 flowers + 60 plants + 12 bouquets**. Demo prices and stock are illustrative, not a promise of real inventory. Seeding is idempotent and keeps manually edited prices/stock and custom photos.
-- Product cards show a real-photo **reference gallery (four images)** on hover; details show four selectable thumbnails. Photo URLs are provided by [LoremFlickr](https://loremflickr.com/) using plant/flower keywords; the user must have internet access. These are illustrative third-party photographs, **not guaranteed to depict the exact listed cultivar**. Bundled SVG fallback images remain available when the service fails. For a real shop, use licensed, species-accurate assets hosted on your own CDN.
-- Search for an item not in the current catalogue: **Out of stock** with a representative photo rather than a dead-end. Price/stock filter mismatches keep normal no-results messaging.
-- Enter a 10-digit mobile or `0`/`+91` prefix. A disabled Place Order button now explains the missing information. Orders use original transactional stock, pricing, and idempotency protections.
-- India-wide **demo delivery estimates** for PINs starting 1–8. Explicit admin PIN entries override them, including disabled delivery zones. This is a classroom simulation **not a courier serviceability claim**; do not promise genuine fulfilment without a live carrier or India Post validation.
-- Checkout provides COD, **Demo online (simulated UPI/card/netbanking, no money charged)**, and Razorpay integration when you configure Razorpay **test keys**. Demo payments have separate `DEMO_PAID` status and are never counted as verified money. Real live payment requires merchant onboarding, keys, verification and operational setup.
-
-**To replace GitHub ShopSense with this project**, first test BloomNest locally; then run `./SYNC_TO_GITHUB.ps1` in PowerShell from `D:\cc_project` and type `REPLACE` after reviewing the warning. This force-with-lease replaces the **main branch contents**, not the repo name. Do not confuse a local ZIP with a completed remote update.
-
-**After updating an existing Docker checkout** (keep existing `.env` and volumes):
-
-```powershell
-docker compose up -d --build
-docker compose exec backend npm run seed
-docker compose ps
-```
-
-The new Prisma migration is applied automatically on backend startup. **Do not run `docker compose down -v`** unless you intend to delete the old database.
-
-This update was syntax checked but NOT fully integration-tested here because Docker and npm packages are unavailable in this workspace. Run `docker compose -f docker-compose.test.yml up --build --abort-on-container-exit --exit-code-from backend-test` on your machine before evaluation.
 
 ## 1. Quick start
 
@@ -125,9 +102,9 @@ bloomnest/
 │  ├─ nginx.conf              # SPA fallback + /api and /uploads proxy
 │  └─ Dockerfile              # node build → nginx:alpine serve
 ├─ scripts/
-│  ├─ generate-images.mjs     # generates all product SVG artwork (no external assets)
+│  ├─ prepare-images.mjs      # photo pipeline: resize/compress catalogue JPEGs + manifest
 │  ├─ smoke-test.sh           # 8 public checks against the running stack
-│  └─ e2e-live.mjs            # 13-step customer→admin walkthrough over HTTP
+│  └─ e2e-live.mjs            # customer→admin walkthrough over HTTP
 └─ docs/                      # architecture, API, deployment, viva, demo script…
 ```
 
@@ -165,10 +142,17 @@ docker compose exec backend npm run create-admin -- admin@yoursite.in "StrongPas
 
 ---
 
-## 4. Razorpay (optional, test mode)
+## 4. Online payments (sandbox by default, Razorpay optional)
 
-The store is fully functional with **Cash on Delivery** without any credentials.
-To enable online payments:
+Checkout always shows two options: **Cash on Delivery** and **Pay online**.
+
+Without any credentials the backend runs a **sandbox simulator**: “Pay now”
+moves the order through the same guarded state machine as a real payment
+(PENDING → PAID, CAPTURED payment record, `PAYMENT_RECEIVED` event) using a
+clearly labelled `pay_SANDBOX_…` id. It is perfect for demos and the course
+viva — nothing is faked in the UI, only the gateway is simulated.
+
+To use real Razorpay **Test Mode**:
 
 1. Create a free test account at <https://dashboard.razorpay.com>.
 2. Settings → API Keys → generate **Test Mode** keys.
@@ -178,12 +162,15 @@ To enable online payments:
 RAZORPAY_KEY_ID=rzp_test_xxxxxxxx
 RAZORPAY_KEY_SECRET=xxxxxxxxxxxxxxxx
 RAZORPAY_WEBHOOK_SECRET=xxxxxxxx        # from the webhook settings page
+PAYMENTS_MODE=auto                       # auto | razorpay | sandbox
 ```
 
-4. `docker compose up -d` (recreates backend). `/api/payments/config` now reports `{"enabled":true,…}`.
+4. `docker compose up -d` (recreates backend). `/api/payments/config` now reports
+   `{"enabled":true,"mode":"razorpay"}` and the same button opens Razorpay checkout.
 5. Add a webhook endpoint `https://your-domain/api/payments/razorpay/webhook` in the Razorpay dashboard.
 
-Without credentials the frontend disables the online option and shows "online payment unavailable" — nothing breaks.
+`PAYMENTS_MODE=razorpay` disables the simulator; `PAYMENTS_MODE=sandbox` forces
+it even when keys exist.
 
 ---
 

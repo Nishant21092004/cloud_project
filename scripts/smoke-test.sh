@@ -39,7 +39,7 @@ expect_contains "catalog API through nginx"   "$BASE/api/catalog/flowers" 'price
 expect_contains "bouquets API"                "$BASE/api/catalog/bouquets" '"name"'
 expect_contains "plants API"                  "$BASE/api/catalog/plants" 'careWatering'
 expect_contains "serviceability (110001)"     "$BASE/api/catalog/serviceability/110001" '"serviceable":true'
-expect_contains "payment config (COD mode)"   "$BASE/api/payments/config" '"enabled"'
+expect_contains "payment config (online + COD)" "$BASE/api/payments/config" '"enabled"'
 # 4. backend readiness — direct inside the private network
 if docker compose exec -T backend wget -qO- http://127.0.0.1:4000/health/ready 2>/dev/null | grep -q '"db":"up"'; then
   echo "PASS  backend /health/ready (db up)"; PASS=$((PASS+1))

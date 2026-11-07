@@ -80,7 +80,7 @@ export interface Quote {
 }
 
 export type OrderStatus = "PLACED" | "CONFIRMED" | "PREPARING" | "OUT_FOR_DELIVERY" | "DELIVERED" | "CANCELLED";
-export type PaymentStatus = "PENDING" | "PAID" | "DEMO_PAID" | "FAILED" | "COD_PENDING" | "COD_COLLECTED" | "REFUND_REQUESTED" | "REFUNDED" | "CANCELLED";
+export type PaymentStatus = "PENDING" | "PAID" | "FAILED" | "COD_PENDING" | "COD_COLLECTED" | "REFUND_REQUESTED" | "REFUNDED" | "CANCELLED";
 
 export interface OrderItem {
   id: string; kind: CartItemKind; title: string; subtitle: string | null;
@@ -96,7 +96,7 @@ export interface PaymentRow {
 }
 
 export interface Order {
-  id: string; orderNumber: string; status: OrderStatus; paymentMethod: "COD" | "RAZORPAY" | "DEMO_ONLINE";
+  id: string; orderNumber: string; status: OrderStatus; paymentMethod: "COD" | "RAZORPAY";
   paymentStatus: PaymentStatus; subtotalPaise: number; deliveryFeePaise: number; totalPaise: number;
   recipientName: string; phone: string; pincode: string; addressLine: string; city: string; state: string;
   deliveryDate: string; slotLabel: string; expiresAt: string | null; cancelledAt: string | null;
@@ -116,7 +116,7 @@ export interface CheckoutQuotePayload {
   quote: Quote;
 }
 
-export interface Serviceability { pincode: string; serviceable: boolean; deliveryFeePaise: number | null; city: string | null; demoCoverage?: boolean }
+export interface Serviceability { pincode: string; serviceable: boolean; deliveryFeePaise: number | null; city: string | null }
 
 export interface AdminStats {
   ordersToday: number; totalOrders: number; deliveredCount: number; pendingPayments: number;

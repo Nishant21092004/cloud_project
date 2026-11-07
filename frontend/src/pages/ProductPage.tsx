@@ -6,7 +6,6 @@ import { formatPaise } from "../lib/format";
 import { ErrorBox, IssueBanner, QtyStepper, Spinner } from "../components/ui";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
-import { photoGallery, fallbackImage } from "../lib/photos";
 
 export function ProductPage() {
   const { slug } = useParams();
@@ -16,14 +15,12 @@ export function ProductPage() {
   const [product, setProduct] = useState<Product | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [qty, setQty] = useState(1);
-  const [selectedPhoto, setSelectedPhoto] = useState(0);
   const [variantId, setVariantId] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [issues, setIssues] = useState<string[]>([]);
 
   useEffect(() => {
     setProduct(null);
-    setSelectedPhoto(0);
     setError(null);
     api<{ product: Product }>(`/api/catalog/products/${slug}`)
       .then((d) => {
@@ -84,7 +81,6 @@ export function ProductPage() {
     : product.type === "bouquet" ? product.inStock
     : Boolean(variantId && product.variants.find((v) => v.id === variantId)?.inStock);
 
-  const photos = photoGallery(product.name, product.imageUrl, product.type);
   return (
     <div className="mx-auto max-w-5xl px-4 py-8">
       <nav className="mb-4 text-sm text-forest-600">
@@ -94,18 +90,8 @@ export function ProductPage() {
       </nav>
 
       <div className="grid gap-8 md:grid-cols-2">
-        <div className="card overflow-hidden p-2">
-          <img src={photos[selectedPhoto]} alt={`${product.name} reference photo ${selectedPhoto + 1}`} className="aspect-square w-full rounded-xl object-cover"
-            onError={(e) => { const fallback = fallbackImage(product.imageUrl, product.type); if (!e.currentTarget.src.endsWith(fallback)) e.currentTarget.src = fallback; }} />
-          <div className="grid grid-cols-4 gap-2 p-2" aria-label="View four reference photographs">
-            {photos.map((src, index) => <button type="button" key={index} onClick={() => setSelectedPhoto(index)}
-              aria-label={`View image ${index + 1}`} aria-pressed={selectedPhoto === index}
-              className={`overflow-hidden rounded-lg border-2 ${selectedPhoto === index ? "border-forest-600" : "border-transparent"}`}>
-              <img src={src} alt="" loading="lazy" className="aspect-square w-full object-cover"
-                onError={(e) => { const fallback = fallbackImage(product.imageUrl, product.type); if (!e.currentTarget.src.endsWith(fallback)) e.currentTarget.src = fallback; }} />
-            </button>)}
-          </div>
-          <p className="px-2 pb-2 text-xs text-forest-700/60">Reference photographs are illustrative; the exact cultivar may vary.</p>
+        <div className="card overflow-hidden">
+          <img src={product.imageUrl} alt={product.name} className="aspect-square w-full object-cover" />
         </div>
 
         <div>

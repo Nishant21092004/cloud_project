@@ -11,19 +11,20 @@ import { prisma } from "../../lib/prisma.js";
 import { badRequest, conflict, notFound } from "../../lib/errors.js";
 import { parse } from "../../lib/validate.js";
 import { z } from "zod";
-import { razorpayEnabled, env } from "../../config/env.js";
+import { razorpayEnabled, env, paymentsMode } from "../../config/env.js";
 import { createPaymentOrder, fetchProviderPayment, verifyCheckoutSignature, verifyWebhookSignature } from "./razorpay.js";
 
 export const paymentsRouter = Router();
 
-/** Public: the frontend asks whether online payment is available (+ public key id). */
+/** Public: the frontend asks which online-payment mode is active (+ public key id). */
 paymentsRouter.get("/config", (_req, res) => {
-  res.json({ enabled: razorpayEnabled, keyId: razorpayEnabled ? env.RAZORPAY_KEY_ID : null });
+  res.json({ enabled: true, mode: paymentsMode, keyId: razorpayEnabled ? env.RAZORPAY_KEY_ID : null });
 });
 
 /** Create a gateway order for a pending online-payment order. */
 paymentsRouter.post("/razorpay/create", requireAuth, async (req, res, next) => {
   try {
+    if (paymentsMode !== "razorpay") throw conflict("SANDBOX_MODE", "The server runs in payment sandbox mode — no real gateway calls are made");
     const user = (req as AuthedRequest).user!;
     const { orderNumber } = parse(z.object({ orderNumber: z.string().min(3) }), req.body);
     const order = await prisma.order.findUnique({ where: { orderNumber }, include: { payments: true } });
@@ -50,6 +51,7 @@ paymentsRouter.post("/razorpay/create", requireAuth, async (req, res, next) => {
 /** Client callback after checkout.js completes — signature + provider verified. */
 paymentsRouter.post("/razorpay/verify", requireAuth, async (req, res, next) => {
   try {
+    if (paymentsMode !== "razorpay") throw conflict("SANDBOX_MODE", "The server runs in payment sandbox mode — use the sandbox completion endpoint");
     const user = (req as AuthedRequest).user!;
     const body = parse(
       z.object({
@@ -115,6 +117,59 @@ paymentsRouter.post("/razorpay/verify", requireAuth, async (req, res, next) => {
       await prisma.orderEvent.create({ data: { orderId: order.id, status: "PAYMENT_RECEIVED", note: `Payment verified (${body.razorpay_payment_id})`, actorRole: "SYSTEM" } });
     }
     res.json({ paid: true, orderNumber: body.orderNumber });
+  } catch (e) {
+    next(e);
+  }
+});
+
+/**
+ * Sandbox payment completion — the built-in simulator used when no Razorpay
+ * keys are configured. Drives the EXACT same guarded state transitions as a
+ * real verified payment (PENDING → PAID, payment CAPTURED, PAYMENT_RECEIVED
+ * event), so demos exercise the real production code path. Every completion
+ * is stamped pay_SANDBOX_… and labelled in the UI — it can never be mistaken
+ * for a real gateway capture.
+ */
+paymentsRouter.post("/sandbox/complete", requireAuth, async (req, res, next) => {
+  try {
+    if (paymentsMode !== "sandbox") throw conflict("REAL_MODE", "Sandbox completion is only available when the server runs in sandbox mode");
+    const user = (req as AuthedRequest).user!;
+    const { orderNumber } = parse(z.object({ orderNumber: z.string().min(3) }), req.body);
+    const order = await prisma.order.findUnique({ where: { orderNumber }, include: { payments: true } });
+    if (!order || order.userId !== user.id) throw notFound("Order not found");
+
+    // idempotent: already paid → acknowledge quietly (safe double-clicks)
+    if (order.paymentStatus === "PAID") {
+      res.json({ paid: true, already: true, orderNumber, mode: "sandbox" });
+      return;
+    }
+
+    // honest late-payment handling, identical to the real verify path
+    if (order.status === "CANCELLED") {
+      await prisma.payment.updateMany({
+        where: { orderId: order.id, status: { in: ["CREATED"] } },
+        data: { status: "LATE", rzpPaymentId: `pay_SANDBOX_LATE_${order.id.slice(0, 8)}` },
+      });
+      await prisma.orderEvent.create({
+        data: { orderId: order.id, status: "PAYMENT_LATE", note: "Sandbox payment attempted after cancellation. Order NOT revived.", actorRole: "SYSTEM" },
+      });
+      throw conflict("PAYMENT_AFTER_CANCELLATION", "This order was cancelled before payment. It is closed; place a new order if you still want these flowers.");
+    }
+    if (order.expiresAt && order.expiresAt < new Date()) throw conflict("ORDER_EXPIRED", "The payment window for this order expired — please place a new order");
+    if (order.paymentMethod !== "RAZORPAY" || order.paymentStatus !== "PENDING") throw conflict("PAYMENT_NOT_PENDING", "This order is not awaiting payment");
+
+    const sandboxPaymentId = `pay_SANDBOX_${createHash("sha256").update(`${order.id}:${Date.now()}`).digest("hex").slice(0, 20)}`;
+    const updated = await prisma.order.updateMany({
+      where: { id: order.id, paymentStatus: "PENDING" },
+      data: { paymentStatus: "PAID" },
+    });
+    if (updated.count === 1) {
+      await recordPaymentCapture(order.id, sandboxPaymentId, "sandbox", "sandbox (demo)");
+      await prisma.orderEvent.create({
+        data: { orderId: order.id, status: "PAYMENT_RECEIVED", note: `Sandbox payment (demo mode) — ${sandboxPaymentId}`, actorRole: "SYSTEM" },
+      });
+    }
+    res.json({ paid: true, orderNumber, mode: "sandbox" });
   } catch (e) {
     next(e);
   }

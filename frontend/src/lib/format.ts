@@ -39,7 +39,6 @@ export const PAYMENT_STATUS_LABELS: Record<string, string> = {
   PENDING: "Payment pending",
   PAID: "Paid online",
   FAILED: "Payment failed",
-  DEMO_PAID: "Demo payment (no charge)",
   COD_PENDING: "Pay on delivery",
   COD_COLLECTED: "Cash collected",
   REFUND_REQUESTED: "Refund initiated",

@@ -1,4 +1,3 @@
-import { checkServiceability } from "../catalog/service.js";
 /**
  * Orders service — the transactional heart of BloomNest.
  *
@@ -35,7 +34,7 @@ export interface CheckoutInput {
   };
   slotId: string;
   deliveryDate: string; // YYYY-MM-DD
-  paymentMethod: "COD" | "RAZORPAY" | "DEMO_ONLINE";
+  paymentMethod: "COD" | "RAZORPAY";
   confirmPricing?: { fingerprint: string; subtotalPaise: number; deliveryFeePaise: number };
 }
 
@@ -76,8 +75,8 @@ export async function createOrder(userId: string, input: CheckoutInput, idempote
 
   // 2 ── resolve address + delivery config
   const addressData = await resolveAddress(userId, input);
-  const pincodeRow = await checkServiceability(addressData.pincode);
-  if (!pincodeRow.serviceable) {
+  const pincodeRow = await prisma.serviceablePincode.findUnique({ where: { pincode: addressData.pincode } });
+  if (!pincodeRow || !pincodeRow.active) {
     throw conflict("NOT_SERVICEABLE", `Sorry, we do not deliver to PIN ${addressData.pincode} yet`, { pincode: addressData.pincode });
   }
   const slot = await prisma.deliverySlot.findFirst({ where: { id: input.slotId, active: true } });
@@ -98,7 +97,7 @@ export async function createOrder(userId: string, input: CheckoutInput, idempote
 
   // 4 ── pricing confirmation gate (protects against stale totals after edits)
   const subtotalPaise = cart.subtotalPaise;
-  const deliveryFeePaise = pincodeRow.deliveryFeePaise!;
+  const deliveryFeePaise = pincodeRow.deliveryFeePaise;
   const totalPaise = subtotalPaise + deliveryFeePaise;
   const confirmed = input.confirmPricing;
   if (!confirmed || confirmed.fingerprint !== cart.fingerprint || confirmed.subtotalPaise !== subtotalPaise || confirmed.deliveryFeePaise !== deliveryFeePaise) {
@@ -209,7 +208,7 @@ export async function createOrder(userId: string, input: CheckoutInput, idempote
         userId,
         status: "PLACED",
         paymentMethod: input.paymentMethod,
-        paymentStatus: input.paymentMethod === "COD" ? "COD_PENDING" : input.paymentMethod === "DEMO_ONLINE" ? "DEMO_PAID" : "PENDING",
+        paymentStatus: input.paymentMethod === "COD" ? "COD_PENDING" : "PENDING",
         subtotalPaise,
         deliveryFeePaise,
         totalPaise,
@@ -223,7 +222,7 @@ export async function createOrder(userId: string, input: CheckoutInput, idempote
         slotLabel: slot.label,
         expiresAt,
         items: { create: itemsData },
-        events: { create: { status: "PLACED", note: `Order placed via ${input.paymentMethod === "COD" ? "Cash on Delivery" : input.paymentMethod === "DEMO_ONLINE" ? "SIMULATED online payment (no money charged)" : "Razorpay online payment"}`, actorRole: "CUSTOMER" } },
+        events: { create: { status: "PLACED", note: `Order placed via ${input.paymentMethod === "COD" ? "Cash on Delivery" : "Online payment"}`, actorRole: "CUSTOMER" } },
       },
     });
 
@@ -313,7 +312,6 @@ export async function cancelOrder(orderNumber: string, userId: string | null, re
       cancelReason: reason || "Cancelled",
       stockRestored: true,
       ...(order.paymentMethod === "RAZORPAY" && order.paymentStatus === "PENDING" ? { paymentStatus: "CANCELLED" } : {}),
-      ...(order.paymentMethod === "DEMO_ONLINE" ? { paymentStatus: "CANCELLED" } : {}),
       ...(order.paymentMethod === "RAZORPAY" && order.paymentStatus === "PAID"
         ? { paymentStatus: "REFUND_REQUESTED", refundNote: "Prepaid order cancelled. Refund must be completed in the Razorpay dashboard; status shows REFUNDED only after an admin verifies it." }
         : {}),

@@ -31,7 +31,7 @@ const checkoutSchema = z.object({
   address: addressSchema.optional(),
   slotId: z.string().min(1, "Please choose a delivery slot"),
   deliveryDate: z.string().min(10),
-  paymentMethod: z.enum(["COD", "RAZORPAY", "DEMO_ONLINE"]),
+  paymentMethod: z.enum(["COD", "RAZORPAY"]),
   confirmPricing: z
     .object({ fingerprint: z.string(), subtotalPaise: z.number().int(), deliveryFeePaise: z.number().int() })
     .optional(),

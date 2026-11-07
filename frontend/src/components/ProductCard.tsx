@@ -1,47 +1,78 @@
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { formatPaise } from "../lib/format";
-import { fallbackImage, photoGallery } from "../lib/photos";
-import { useState } from "react";
 
 export interface CardProps {
   slug: string;
   name: string;
   image: string;
+  /** Extra views of the same product (hover gallery). Card image is view #1. */
+  gallery?: string[];
   priceLabel: string;
   inStock: boolean;
   subtitle?: string;
   accent?: string;
-  kind?: "flower" | "plant" | "bouquet";
 }
 
-export function ProductCard({ slug, name, image, priceLabel, inStock, subtitle, accent, kind = "flower" }: CardProps) {
-  const [preview, setPreview] = useState(0);
-  const photos = photoGallery(name, image, kind);
+export function ProductCard({ slug, name, image, gallery, priceLabel, inStock, subtitle, accent }: CardProps) {
+  const views = useMemo(
+    () => [image, ...(gallery ?? [])].filter((v, i, a) => a.indexOf(v) === i).slice(0, 4),
+    [image, gallery],
+  );
+  const [active, setActive] = useState(0);
+  const [hovering, setHovering] = useState(false);
+  const [paused, setPaused] = useState(false);
+  useEffect(() => setActive(0), [slug]);
+
+  // While hovering the card, cycle through the 3–4 views automatically.
+  useEffect(() => {
+    if (!hovering || paused || views.length < 2) return;
+    const id = window.setInterval(() => setActive((i) => (i + 1) % views.length), 1100);
+    return () => window.clearInterval(id);
+  }, [hovering, paused, views.length]);
+
   return (
     <Link
       to={`/product/${slug}`}
+      onMouseEnter={() => setHovering(true)}
+      onMouseLeave={() => { setHovering(false); setPaused(false); setActive(0); }}
       className="card group overflow-hidden transition hover:-translate-y-0.5 hover:shadow-lift"
     >
       <div className="relative aspect-square overflow-hidden bg-cream-200">
-        <img
-          src={photos[preview]}
-          alt={name}
-          loading="lazy"
-          className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]"
-          onError={(e) => { const target = e.currentTarget; const fallback = fallbackImage(image, kind); if (!target.src.endsWith(fallback)) target.src = fallback; }}
-        />
-        <div className="absolute bottom-2 left-2 right-2 hidden grid-cols-4 gap-1.5 rounded-xl bg-white/90 p-1.5 group-hover:grid group-focus-within:grid" aria-label={`More ${name} reference photos`}>
-          {photos.map((url, index) => (
-            <img key={index} src={url} alt="" loading="lazy" onMouseEnter={() => setPreview(index)}
-              onError={(e) => { const fallback = fallbackImage(image, kind); if (!e.currentTarget.src.endsWith(fallback)) e.currentTarget.src = fallback; }}
-              className={`aspect-square w-full rounded-md border-2 object-cover ${preview === index ? "border-forest-600" : "border-white"}`} />
-          ))}
-        </div>
+        {views.map((src, i) => (
+          <img
+            key={src}
+            src={src}
+            alt={`${name} — view ${i + 1}`}
+            loading="lazy"
+            className={`absolute inset-0 h-full w-full object-cover transition duration-300 ${
+              i === active ? "scale-100 opacity-100" : "scale-[1.04] opacity-0"
+            }`}
+          />
+        ))}
         {!inStock && (
           <span className="badge absolute left-3 top-3 bg-red-100 text-red-700">Out of stock</span>
         )}
         {accent && inStock && (
           <span className="badge absolute left-3 top-3 bg-forest-700/90 text-cream-50">{accent}</span>
+        )}
+        {views.length > 1 && (
+          <div
+            className="absolute inset-x-0 bottom-2 flex justify-center gap-1.5"
+            onMouseEnter={() => setPaused(true)}
+            onMouseLeave={() => setPaused(false)}
+          >
+            {views.map((src, i) => (
+              <span
+                key={src}
+                role="presentation"
+                onMouseEnter={() => setActive(i)}
+                className={`h-1.5 rounded-full transition-all duration-200 ${
+                  i === active ? "w-5 bg-forest-700" : "w-1.5 bg-forest-700/40 group-hover:bg-forest-700/70"
+                }`}
+              />
+            ))}
+          </div>
         )}
       </div>
       <div className="p-4">

@@ -28,8 +28,8 @@ docker compose up --build -d
 # 2. Wait until all three say "healthy" (re-run until healthy):
 docker compose ps
 
-# 3. Load the demo catalogue (14 flowers, 6 bouquets, 8 plants, pincodes, admin user).
-#    FIRST BOOT ONLY — running it twice just re-inserts the same demo data.
+# 3. Load the demo catalogue (56 flowers, 50 plants, 6 bouquets, 125 PIN codes,
+#    admin + demo customer). Safe to re-run — it upserts the same data.
 docker compose exec backend npm run seed
 
 # 4. Open the store:
@@ -41,7 +41,8 @@ Login accounts after seeding:
 | Who | Where | Credentials |
 |---|---|---|
 | Admin | http://localhost/admin | `admin@bloomnest.test` / `Admin@1234` |
-| Customer | "Register" in the navbar | any email + password (8+ chars, 1 letter + 1 number) |
+| Demo customer | Login in the navbar | `demo@bloomnest.test` / `Demo@1234` |
+| New customer | "Register" in the navbar | any email + password (8+ chars, 1 letter + 1 number) |
 
 ---
 
@@ -105,40 +106,50 @@ bash scripts/smoke-test.sh              # default http://localhost:80
 bash scripts/smoke-test.sh http://localhost:8080   # if you changed WEB_PORT
 ```
 
-Live end-to-end (13 real HTTP steps: register → build bouquet → checkout →
-admin delivers the order) — PowerShell, from the project folder:
+Live end-to-end (register → build bouquet → checkout → admin delivers the
+order → sandbox online payment → honest refund request) — PowerShell, from the
+project folder:
 
 ```powershell
-docker run --rm --network cc_project_internal -v "${PWD}\scripts:/s:ro" node:20-alpine node /s/e2e-live.mjs http://web:80
+docker run --rm --network bloomnest_internal -v "${PWD}\scripts:/s:ro" node:20-alpine node /s/e2e-live.mjs http://web:80
 ```
 
-> Note: `cc_project_internal` is the Docker network named after this folder.
-> If you moved/renamed the folder, check the real name with
-> `docker network ls` and use that.
+> Note: `bloomnest_internal` is the Docker network created by `docker-compose.yml`
+> (project name `bloomnest`, same in `D:\cc_project` and the original folder).
+> If you renamed it, check with `docker network ls` and use that.
 
-Expected: `ALL 13 E2E STEPS PASSED` plus the created order number.
+Expected: every line starts with `PASS`, followed by `ORDER_NUMBER=…` and
+`ONLINE_ORDER=…` at the end.
 
 ---
 
-## 6. Optional — enable real Razorpay (test mode)
+## 6. Online payments — sandbox by default, real Razorpay with keys
 
-1. Create a Razorpay account → Dashboard → **Settings → API Keys → Generate Test Keys**.
-2. Put them in `.env` (project root):
+Checkout always offers **two** options: Cash on Delivery and **Pay online
+(UPI / cards / netbanking)**.
 
-   ```env
-   RAZORPAY_KEY_ID=rzp_test_xxxxxxxx
-   RAZORPAY_KEY_SECRET=xxxxxxxxxxxxxxxx
-   RAZORPAY_WEBHOOK_SECRET=any_secret_you_choose
-   ```
+- **No keys needed (default):** the server runs in **sandbox** mode. The
+  “Pay now” button drives the *real* guarded state machine (PENDING → PAID,
+  payment record CAPTURED, `PAYMENT_RECEIVED` timeline event) with a clearly
+  labelled demo payment id (`pay_SANDBOX_…`). No real money moves and no
+  Razorpay account is contacted.
+- **Real test mode:** put Razorpay **Test Mode** keys in `.env` and the same
+  button opens the real Razorpay checkout:
 
-3. Recreate the backend so it picks up the new env:
+  ```env
+  RAZORPAY_KEY_ID=rzp_test_xxxxxxxx
+  RAZORPAY_KEY_SECRET=xxxxxxxxxxxxxxxx
+  RAZORPAY_WEBHOOK_SECRET=any_secret_you_choose
+  PAYMENTS_MODE=auto        # auto = real Razorpay when keys exist, else sandbox
+  ```
 
-   ```powershell
-   docker compose up -d --force-recreate backend
-   ```
+  ```powershell
+  docker compose up -d --force-recreate backend
+  ```
 
-4. Checkout now offers the **Pay Online (Razorpay)** option with real test
-   payments. Without keys, the store simply shows COD only — by design.
+  `PAYMENTS_MODE=razorpay` forbids the sandbox simulator, `PAYMENTS_MODE=sandbox`
+  always uses the simulator — useful for demos where you do not want to touch
+  a real gateway.
 
 ---
 
@@ -167,9 +178,9 @@ docker compose exec backend npm run create-admin -- manager@store.test "Strong P
 
 ## 9. Where the data lives + backups
 
-- Database → Docker volume `cc_project_db_data` (or `bloomnest_db_data` in the
-  original folder) — survives `docker compose down`, dies only with `down -v`.
-- Admin-uploaded images → volume `cc_project_uploads`, served at `/uploads/…`.
+- Database → Docker volume `bloomnest_db_data` — survives `docker compose down`,
+  dies only with `down -v`.
+- Admin-uploaded images → volume `bloomnest_uploads`, served at `/uploads/…`.
 - Backup (DB dump + uploads tar, written to `D:\cc_project\backups\`):
 
   ```bash

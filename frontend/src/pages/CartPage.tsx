@@ -1,4 +1,3 @@
-import { fallbackImage } from "../lib/photos";
 import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api } from "../api/client";
@@ -78,7 +77,7 @@ export function CartPage() {
           {cart.lines.map((line) => (
             <li key={line.itemId} className={`card flex gap-4 p-4 transition ${busyItem === line.itemId ? "opacity-50" : ""} ${line.issues.length > 0 ? "ring-1 ring-marigold-400/60" : ""}`}>
               {line.image ? (
-                <img src={line.image} alt="" className="h-20 w-20 shrink-0 rounded-xl bg-cream-200 object-cover" onError={(e) => { e.currentTarget.src = fallbackImage("", line.kind === "PLANT" ? "plant" : "flower"); }} />
+                <img src={line.image} alt="" className="h-20 w-20 shrink-0 rounded-xl bg-cream-200 object-cover" />
               ) : (
                 <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-xl bg-forest-50 text-2xl">💐</div>
               )}

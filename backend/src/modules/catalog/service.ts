@@ -5,7 +5,6 @@
  */
 import { prisma } from "../../lib/prisma.js";
 import { notFound } from "../../lib/errors.js";
-import { estimateDemoDelivery } from "./delivery.js";
 
 export interface CatalogFilters {
   q?: string;
@@ -113,9 +112,7 @@ export async function getBuilderOptions() {
 
 export async function checkServiceability(pincode: string) {
   const row = await prisma.serviceablePincode.findUnique({ where: { pincode } });
-  if (row) return { pincode, serviceable: row.active, deliveryFeePaise: row.active ? row.deliveryFeePaise : null, city: row.city, demoCoverage: false };
-  const demoFee = estimateDemoDelivery(pincode);
-  return { pincode, serviceable: demoFee !== null, deliveryFeePaise: demoFee, city: demoFee === null ? null : "India-wide (demo estimate)", demoCoverage: demoFee !== null };
+  return { pincode, serviceable: Boolean(row?.active), deliveryFeePaise: row?.active ? row.deliveryFeePaise : null, city: row?.city ?? null };
 }
 
 export async function getActiveSlots() {

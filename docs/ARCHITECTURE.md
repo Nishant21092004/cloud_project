@@ -15,7 +15,7 @@ flowchart LR
             U[("uploads volume\nadmin product images")]
         end
     end
-    R["Razorpay (optional, test mode)"]
+    R["Online payments\nsandbox simulator by default\nRazorpay test mode with keys"]
     B -->|"HTTP :80"| N
     N -->|"static files"| B
     N -->|"/api/* , /uploads/*"| A
@@ -83,8 +83,8 @@ Guarantees:
 
 ```mermaid
 stateDiagram-v2
-    [*] --> PENDING : COD order / Razorpay order placed
-    PENDING --> PAID : /verify (sig + provider fetch) or webhook, guarded UPDATE
+    [*] --> PENDING : COD order / online order placed
+    PENDING --> PAID : /verify (sig + provider fetch), webhook, or sandbox /sandbox/complete — guarded UPDATE
     PENDING --> FAILED : payment.failed webhook
     PENDING --> EXPIRED : sweeper (TTL 30 min) → order CANCELLED, stock restored
     PENDING --> CANCELLED : order cancelled while unpaid

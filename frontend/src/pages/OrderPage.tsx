@@ -54,22 +54,34 @@ export function OrderPage() {
     }
   };
 
-  /** Razorpay Test-Mode payment: create gateway order → checkout.js → verify. */
+  /** Online payment: real Razorpay Test Mode, or the built-in sandbox simulator. */
   const payNow = async () => {
     setBusy(true);
     try {
-      const cfg = await api<{ razorpayOrderId: string; amountPaise: number; keyId: string }>(
+      const cfg = await api<{ enabled: boolean; mode: "razorpay" | "sandbox"; keyId: string | null }>("/api/payments/config");
+
+      if (cfg.mode === "sandbox") {
+        const done = await api<{ paid: boolean; already?: boolean }>("/api/payments/sandbox/complete", {
+          method: "POST",
+          body: { orderNumber },
+        });
+        toast("success", done.already ? "Payment was already recorded." : "Sandbox payment successful (demo mode) — receipt updated!");
+        load();
+        return;
+      }
+
+      const gateway = await api<{ razorpayOrderId: string; amountPaise: number; keyId: string }>(
         `/api/payments/razorpay/create`,
         { method: "POST", body: { orderNumber } },
       );
       if (!window.Razorpay) await loadRazorpayScript();
       const rzp = new window.Razorpay!({
-        key: cfg.keyId,
-        amount: cfg.amountPaise,
+        key: gateway.keyId,
+        amount: gateway.amountPaise,
         currency: "INR",
         name: "BloomNest",
         description: `Order ${orderNumber}`,
-        order_id: cfg.razorpayOrderId,
+        order_id: gateway.razorpayOrderId,
         prefill: { name: order?.recipientName, contact: order?.phone },
         theme: { color: "#2f5d3a" },
         handler: async (response: { razorpay_payment_id: string; razorpay_order_id: string; razorpay_signature: string }) => {
@@ -110,7 +122,6 @@ export function OrderPage() {
           <p className="text-sm text-cream-100/85">
             Delivering {deliveryDayLabel(order.deliveryDate)}, {order.slotLabel.toLowerCase()} to {order.city}.
             {order.paymentStatus === "PAID" && " Payment received."}
-            {order.paymentStatus === "DEMO_PAID" && " Demo payment simulated. No actual money was charged."}
             {order.paymentStatus === "COD_PENDING" && " Keep cash ready at delivery."}
           </p>
         </div>
@@ -122,7 +133,7 @@ export function OrderPage() {
           <div className="flex flex-wrap gap-2">
             <span className={`badge ${statusTone(order.status)}`}>{STATUS_LABELS[order.status]}</span>
             <span className={`badge ${statusTone(order.paymentStatus)}`}>{PAYMENT_STATUS_LABELS[order.paymentStatus]}</span>
-            <span className="badge bg-cream-200 text-forest-700">{order.paymentMethod === "COD" ? "Cash on Delivery" : "Razorpay"}</span>
+            <span className="badge bg-cream-200 text-forest-700">{order.paymentMethod === "COD" ? "Cash on Delivery" : "Online payment"}</span>
           </div>
           <div className="flex gap-2">
             {needPayment && (
