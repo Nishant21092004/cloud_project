@@ -83,8 +83,7 @@ export type ProductDetail =
   | ({ type: "bouquet" } & Awaited<ReturnType<typeof listBouquets>>[number])
   | ({ type: "plant" } & Awaited<ReturnType<typeof listPlants>>[number]);
 
-export async function getProductBySlug(slug: string): Promise<ProductDetail> {
-  const flower = await prisma.flower.findUnique({ where: { slug } });
+export async function getProductBySlug(slug: string): Promise<ProductDetail> {  const flower = await prisma.flower.findUnique({ where: { slug } });
   if (flower && flower.active) {
     return { type: "flower", ...flower, inStock: flower.stockStems > 0, unitLabel: "per stem" };
   }
@@ -117,4 +116,78 @@ export async function checkServiceability(pincode: string) {
 
 export async function getActiveSlots() {
   return prisma.deliverySlot.findMany({ where: { active: true }, orderBy: { sortOrder: "asc" }, select: { id: true, label: true } });
+}
+
+/** Flower species tokens used to group sibling varieties for recommendations. */
+const FLOWER_FAMILIES = [
+  "bird-of-paradise", "alstroemeria", "chrysanthemum", "babys-breath", "eucalyptus",
+  "anthurium", "hydrangea", "gladiolus", "delphinium", "sunflower", "tuberose",
+  "carnation", "gerbera", "marigold", "lisianthus", "freesia", "daffodil",
+  "jasmine", "lavender", "orchid", "dahlia", "peony", "zinnia", "cosmos",
+  "gazania", "lily", "iris", "tulip", "rose", "lotus", "aster", "daisy",
+];
+
+function flowerFamily(slug: string): string | null {
+  const parts = slug.split("-");
+  for (const f of FLOWER_FAMILIES) if (parts.includes(f)) return f;
+  return null;
+}
+
+export type RelatedItem =
+  | { type: "flower"; slug: string; name: string; imageUrl: string; pricePerStemPaise: number; inStock: boolean; stockStems: number; subtitle: string; gallery: string[] }
+  | { type: "bouquet"; slug: string; name: string; imageUrl: string; pricePaise: number; inStock: boolean; subtitle: string; gallery: string[] }
+  | { type: "plant"; slug: string; name: string; imageUrl: string; priceFromPaise: number | null; inStock: boolean; subtitle: string; accent: string; gallery: string[] };
+
+/**
+ * Rule-based "You may also like" recommendations:
+ *  - flowers → same species family first (in-stock first, then most stocked),
+ *    then the store's most-stocked flowers as a popularity fallback;
+ *  - bouquets → closest price first (same budget), in-stock first;
+ *  - plants  → same light requirement first, then closest price.
+ * Deterministic, cheap and explainable — no personal data required.
+ */
+export async function getRelatedProducts(slug: string, limit = 4): Promise<RelatedItem[]> {
+  const product = await getProductBySlug(slug);
+
+  if (product.type === "flower") {
+    const self = flowerFamily(slug);
+    const all = await prisma.flower.findMany({ where: { active: true, slug: { not: slug } }, orderBy: [{ stockStems: "desc" }, { name: "asc" }] });
+    const inStockFirst = <T extends { stockStems: number }>(a: T, b: T) => Number(b.stockStems > 0) - Number(a.stockStems > 0) || b.stockStems - a.stockStems;
+    const family = all.filter((f) => self !== null && flowerFamily(f.slug) === self).sort(inStockFirst);
+    const rest = all.filter((f) => self === null || flowerFamily(f.slug) !== self).sort(inStockFirst);
+    const galleryFor = (f: (typeof all)[number]) =>
+      self === null
+        ? []
+        : all.filter((o) => o.slug !== f.slug && flowerFamily(o.slug) === self).slice(0, 3).map((o) => o.imageUrl);
+    return [...family, ...rest].slice(0, limit).map((f) => ({
+      type: "flower" as const, slug: f.slug, name: f.name, imageUrl: f.imageUrl,
+      pricePerStemPaise: f.pricePerStemPaise, inStock: f.stockStems > 0, stockStems: f.stockStems,
+      subtitle: f.description, gallery: galleryFor(f),
+    }));
+  }
+
+  if (product.type === "bouquet") {
+    const all = await listBouquets({});
+    const others = all
+      .filter((b) => b.slug !== slug)
+      .sort((a, b) => Number(b.inStock) - Number(a.inStock) || Math.abs(a.pricePaise - product.pricePaise) - Math.abs(b.pricePaise - product.pricePaise));
+    return others.slice(0, limit).map((b) => ({
+      type: "bouquet" as const, slug: b.slug, name: b.name, imageUrl: b.imageUrl,
+      pricePaise: b.pricePaise, inStock: b.inStock, subtitle: b.description, gallery: [],
+    }));
+  }
+
+  const all = await listPlants({});
+  const others = all.filter((p) => p.slug !== slug);
+  const byLight = others
+    .filter((p) => p.careLight === product.careLight)
+    .sort((a, b) => Number(b.inStock) - Number(a.inStock) || (a.priceFromPaise ?? 0) - (b.priceFromPaise ?? 0));
+  const rest = others
+    .filter((p) => p.careLight !== product.careLight)
+    .sort((a, b) => (a.priceFromPaise ?? 0) - (b.priceFromPaise ?? 0));
+  return [...byLight, ...rest].slice(0, limit).map((p) => ({
+    type: "plant" as const, slug: p.slug, name: p.name, imageUrl: p.imageUrl,
+    priceFromPaise: p.priceFromPaise, inStock: p.inStock, subtitle: p.description,
+    accent: `💧 ${p.careWatering}`, gallery: [],
+  }));
 }

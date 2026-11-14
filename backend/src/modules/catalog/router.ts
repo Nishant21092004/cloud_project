@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { parse, pincodeSchema } from "../../lib/validate.js";
-import { checkServiceability, getActiveSlots, getBuilderOptions, getProductBySlug, listBouquets, listFlowers, listPlants, type CatalogFilters } from "./service.js";
+import { checkServiceability, getActiveSlots, getBuilderOptions, getProductBySlug, getRelatedProducts, listBouquets, listFlowers, listPlants, type CatalogFilters } from "./service.js";
 import { priceCustomBouquet } from "./pricing.js";
 import { loadConfigFromInput } from "../cart/service.js";
 
@@ -34,6 +34,11 @@ catalogRouter.get("/plants", async (req, res, next) => {
 
 catalogRouter.get("/products/:slug", async (req, res, next) => {
   try { res.json({ product: await getProductBySlug(req.params.slug) }); } catch (e) { next(e); }
+});
+
+/** Rule-based "You may also like" recommendations for a product page. */
+catalogRouter.get("/products/:slug/related", async (req, res, next) => {
+  try { res.json({ related: await getRelatedProducts(req.params.slug) }); } catch (e) { next(e); }
 });
 
 catalogRouter.get("/options", async (_req, res, next) => {

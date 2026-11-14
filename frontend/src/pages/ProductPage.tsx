@@ -4,8 +4,14 @@ import { api } from "../api/client";
 import type { Product } from "../api/types";
 import { formatPaise } from "../lib/format";
 import { ErrorBox, IssueBanner, QtyStepper, Spinner } from "../components/ui";
+import { ProductCard } from "../components/ProductCard";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
+
+type Related =
+  | { type: "flower"; slug: string; name: string; imageUrl: string; pricePerStemPaise: number; inStock: boolean; stockStems: number; subtitle: string; gallery: string[] }
+  | { type: "bouquet"; slug: string; name: string; imageUrl: string; pricePaise: number; inStock: boolean; subtitle: string; gallery: string[] }
+  | { type: "plant"; slug: string; name: string; imageUrl: string; priceFromPaise: number | null; inStock: boolean; subtitle: string; accent: string; gallery: string[] };
 
 export function ProductPage() {
   const { slug } = useParams();
@@ -18,6 +24,7 @@ export function ProductPage() {
   const [variantId, setVariantId] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [issues, setIssues] = useState<string[]>([]);
+  const [related, setRelated] = useState<Related[]>([]);
 
   useEffect(() => {
     setProduct(null);
@@ -32,6 +39,9 @@ export function ProductPage() {
         }
       })
       .catch((e) => setError(e.message));
+    api<{ related: Related[] }>(`/api/catalog/products/${slug}/related`)
+      .then((d) => setRelated(d.related))
+      .catch(() => setRelated([]));
   }, [slug]);
 
   if (error) return <div className="mx-auto max-w-3xl px-4 py-10"><ErrorBox message={error} /></div>;
@@ -150,6 +160,34 @@ export function ProductPage() {
           )}
         </div>
       </div>
+
+      {related.length > 0 && (
+        <section className="mt-12">
+          <h2 className="mb-1 text-xl font-semibold text-forest-800">You may also like</h2>
+          <p className="mb-4 text-sm text-forest-700/60">
+            Picked by the same rules our catalogue uses — same family first, then store favourites.
+          </p>
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+            {related.map((r) => (
+              <ProductCard
+                key={r.slug}
+                slug={r.slug}
+                name={r.name}
+                image={r.imageUrl}
+                gallery={r.type === "flower" ? r.gallery : undefined}
+                priceLabel={
+                  r.type === "flower" ? `${formatPaise(r.pricePerStemPaise)} / stem`
+                  : r.type === "bouquet" ? formatPaise(r.pricePaise)
+                  : r.priceFromPaise !== null ? `From ${formatPaise(r.priceFromPaise)}` : "—"
+                }
+                inStock={r.inStock}
+                subtitle={r.subtitle}
+                accent={r.type === "flower" ? (r.inStock ? `${r.stockStems} stems` : undefined) : r.type === "plant" ? r.accent : undefined}
+              />
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   );
 }

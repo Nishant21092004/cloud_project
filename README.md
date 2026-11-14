@@ -1,7 +1,8 @@
 # BloomNest — Flowers, Custom Bouquets & Plants 🌸
 
 A full-stack online flower & plant store for Indian customers, built as a cloud-computing course project.
-112-product catalogue (56 flowers, 50 plants, 6 bouquets), custom bouquet builder, per-stem flower
+112-product catalogue (56 flowers, 50 plants, 6 bouquets), custom bouquet builder, rule-based
+"You may also like" recommendations, per-stem flower
 inventory, plant variants, pan-India delivery, COD + online payments (sandbox by default, Razorpay
 Test Mode with keys), React storefront + admin dashboard, all running on Docker.
 
@@ -88,7 +89,7 @@ bloomnest/
 │  ├─ src/
 │  │  ├─ modules/
 │  │  │  ├─ auth/             # register/login/logout (+ admin CLI script)
-│  │  │  ├─ catalog/          # flowers/bouquets/plants + PRICING ENGINE
+│  │  │  ├─ catalog/          # flowers/bouquets/plants + PRICING ENGINE + recommendations
 │  │  │  ├─ cart/             # persistent cart, server-priced every load
 │  │  │  ├─ orders/           # checkout transaction, cancellation, expiry
 │  │  │  ├─ payments/         # Razorpay create/verify/webhook (idempotent)

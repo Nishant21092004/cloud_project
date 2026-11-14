@@ -1,4 +1,4 @@
-# 10 Likely Viva Questions — simple Hinglish answers
+# 12 Likely Viva Questions — simple Hinglish answers
 
 **Q1. Cloud computing kaise use kiya is project mein? (deployment model?)**
 Sir, humne IaaS-style deployment kiya hai — ek Linux VM pe Docker chala ke poora stack containers mein daala hai. Frontend Nginx container hai, backend Node.js API container hai, aur database PostgreSQL container. Teeno ek private Docker network pe hain, sirf Nginx ka port 80 bahar exposed hai — ye least-privilege exposure hai. Data ke liye named volumes hain, config ke liye environment variables — ye 12-factor app ka principle hai. Aage ke liye documented hai ki managed database (RDS jaisa) aur multiple instances kaise lag sakte hain.
@@ -29,3 +29,9 @@ Nginx teen kaam karta hai: (1) React ka built bundle serve karta hai with SPA fa
 
 **Q10. Single VM ki limitations kya hain? Production mein kya badlogoge?**
 Single VM single point of failure hai, vertical scale hi kar sakte hain. In-memory rate limiting per-instance hai, sweeper bhi backend ke andar chalta hai. Production mein: 2+ backend replicas load balancer ke peeche, managed PostgreSQL (RDS) automated backups ke saath, images ke liye S3-jaisa object storage + CDN, Redis for rate limiting/sessions, CI/CD pipeline registry ke saath, aur centralized logging/monitoring (Prometheus-Grafana). Ye sab DEPLOYMENT.md mein documented hai — implemented vs future clearly alag kiya hua hai.
+
+**Q11. Recommendation system kaise kaam karta hai? ML use kiya hai?**
+Nahi sir, humne deterministic rule-based recommendations banaye hain — "You may also like" section. Product page pe server (GET /products/:slug/related) same species family ke flowers pehle suggest karta hai — jaise Red Rose pe Pink/White/Yellow/Peach Rose — in-stock items pehle, phir sabse zyada stocked. Phir store favourites fill karta hai. Bouquets mein closest price, plants mein same light requirement. Rule-based isliye choose kiya kyunki ye explainable hai, sasta hai, aur bina user history ke chalta hai — cold-start problem nahi aata. Ye content-based filtering ka example hai; production mein ise ML model se upgrade kar sakte hain, API ka shape same reh sakta hai.
+
+**Q12. AWS mein kaunse services use hongi agar isse deploy karna ho?**
+Abhi humne local Docker Desktop pe IaaS-style run kiya hai. AWS pe same architecture map hoga: compute ke liye EC2 (ya Lightsail) — usi VM pe Docker chalega, security group se sirf port 80/443 open. Data ke liye do raaste: ya to EC2 ke saath self-managed PostgreSQL container (named volume + backup script), ya managed RDS. Images/uploads ke liye S3 + CloudFront CDN. Secrets ke liye AWS Secrets Manager ya SSM Parameter Store. Scaling ke liye Application Load Balancer + Auto Scaling group, monitoring ke liye CloudWatch. Deployment docs mein ye sab step-by-step likha hai — implemented vs future clearly separated hai.

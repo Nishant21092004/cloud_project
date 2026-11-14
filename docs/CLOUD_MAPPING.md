@@ -22,6 +22,7 @@ during testing (see TESTING.md).
 | 14 | In-memory limiter documented as single-instance limitation → Redis next step | **Stateless vs stateful services; horizontal scale readiness** | `src/middleware/ratelimit.ts` |
 | 15 | Optional third-party integration (Razorpay) via outbound HTTPS + signed webhooks | **SaaS/API integration, signed callbacks** | `src/modules/payments/` |
 | 16 | Public URL exists only if you deploy to a VM — hosting a real VM was out of scope locally | **IaaS deployment model** — you provision the VM, we ship the image | — |
+| 17 | "You may also like" — same-family / closest-price / same-care rules with a popularity fallback, verified on product pages | **Content-based filtering** — deterministic, explainable personalization without user history (no cold-start problem) | `modules/catalog/service.ts` `getRelatedProducts` |
 
 **Deployment model used:** IaaS-style — a plain Linux VM running Docker, everything self-managed.
 **Future models to mention:** PaaS (e.g. managed container apps), SaaS components (managed DB, managed payments — already used: Razorpay *is* Payments-as-a-Service), and FaaS options for async workers.

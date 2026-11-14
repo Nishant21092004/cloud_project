@@ -42,7 +42,7 @@ src/
 │                       central JSON error handler (no stack leaks)
 └─ modules/
    ├─ auth/             register (always CUSTOMER), login, logout, me
-   ├─ catalog/          public reads + THE PRICING ENGINE (pure functions)
+   ├─ catalog/          public reads + THE PRICING ENGINE (pure functions) + rule-based recommendations
    ├─ cart/             persistent cart; every load is re-priced server-side
    ├─ orders/           checkout transaction, quotes, cancel, expiry sweeper
    ├─ payments/         Razorpay create/verify/webhook — all idempotent
@@ -144,7 +144,7 @@ erDiagram
 
 - `src/api/client.ts` — one fetch wrapper (credentials: include, typed, `ApiError` with server codes).
 - Contexts: `AuthContext` (session), `ToastContext` (feedback).
-- Pages: Home, Catalog (flowers/bouquets/plants share one filterable page), Product, **Builder** (live 2D SVG preview + server-priced bill), Cart, Checkout, Login/Register, Orders, Order detail (timeline + cancel + pay-now), Admin (dashboard/products/orders/settings).
+- Pages: Home, Catalog (flowers/bouquets/plants share one filterable page), Product (+ "You may also like" related picks), **Builder** (live 2D SVG preview + server-priced bill), Cart, Checkout, Login/Register, Orders, Order detail (timeline + cancel + pay-now), Admin (dashboard/products/orders/settings).
 - Loading, empty, error and success states everywhere; mobile-first Tailwind layout.
 
 ## 8. Deliberate simplifications (single-VM)

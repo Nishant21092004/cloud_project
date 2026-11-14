@@ -31,6 +31,7 @@ Admins are created only via the server CLI: `docker compose exec backend npm run
 | GET | `/bouquets?…` | availability computed from recipe stems |
 | GET | `/plants?…` | includes variants (pot × size) with per-variant price/stock |
 | GET | `/products/:slug` | one product of any type |
+| GET | `/products/:slug/related` | rule-based **"You may also like"** — flowers: same species family first (in-stock first, most-stocked next), then store favourites; bouquets: closest price; plants: same light need. Includes same-family `gallery` for flower cards |
 | GET | `/options` | active wrappings, ribbons, extras (for the builder) |
 | GET | `/delivery-slots` | active slots |
 | GET | `/serviceability/:pincode` | `{serviceable, deliveryFeePaise, city}` |

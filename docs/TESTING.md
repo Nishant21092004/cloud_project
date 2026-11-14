@@ -3,7 +3,7 @@
 Environment: Windows 11 + Docker Desktop (containers `node:20-alpine`, `postgres:16-alpine`, `nginx:1.27-alpine`).
 Date: 2026-10-16.
 
-## 1. Automated test suite — 46 tests, 6 files, ALL PASSING
+## 1. Automated test suite — 49 tests, 7 files, ALL PASSING
 
 Run with:
 
@@ -14,8 +14,8 @@ docker compose -f docker-compose.test.yml up --build --abort-on-container-exit -
 Runs against an **ephemeral tmpfs PostgreSQL** — real database, real HTTP (supertest), no mocks except the Razorpay SDK client (signatures themselves are really HMAC-verified; see below). Final run:
 
 ```
- Test Files  6 passed (6)
-      Tests  46 passed (46)
+ Test Files  7 passed (7)
+      Tests  49 passed (49)
 ```
 
 ### auth.test.ts — registration, login, authorization (7 tests) ✅
@@ -54,15 +54,21 @@ Runs against an **ephemeral tmpfs PostgreSQL** — real database, real HTTP (sup
 - admin cancel restores stock; COD cannot be marked REFUNDED; stats computed from real records (cancelled order adds ₹0 revenue)
 - admin filters: by status, by phone/PIN search
 
+### recommendations.test.ts — rule-based "You may also like" (3 tests) ✅
+- flowers: same species family first — in-stock `rose-pink` ranks above out-of-stock `rose-white` despite less stock; most-stocked flowers fill the remaining slots; self always excluded; card `gallery` = same-family images
+- bouquets: self excluded; in-stock + closest price first
+- plants: same care-light first, then others; unknown slug → 404
+
 ## 2. Live stack verification (docker compose up --build) ✅
 
 | Check | Result |
 |---|---|
 | `docker compose build` — db + backend + web images | ✅ built |
 | Stack boots; backend applies migrations on start | ✅ healthy |
-| `npm run seed` in container: 14 flowers, 6 bouquets, 8 plants, 18 variants, 12 pincodes | ✅ |
+| `npm run seed` in container: 56 flowers, 50 plants, 6 bouquets, 125 serviceable PIN codes | ✅ |
 | `scripts/smoke-test.sh` (8 public checks through Nginx) | ✅ 8/8 PASS |
-| `scripts/e2e-live.mjs` — 13-step HTTP walkthrough: register → build bouquet → PRICE_CHANGED dance → COD order → admin timeline to DELIVERED → COD_COLLECTED → stranger denied | ✅ 13/13 PASS (order `BN-261016-GJ6KZ`) |
+| `scripts/e2e-live.mjs` — 19-step HTTP walkthrough: register → build bouquet → PRICE_CHANGED dance → COD order → admin timeline to DELIVERED → COD_COLLECTED → sandbox online payment → honest refund request → stranger denied | ✅ 19/19 PASS (orders `BN-261114-HE6F3`, `BN-261114-S8HER`) |
+| `GET /api/catalog/products/rose-red/related` — same-family roses first, each with a same-family gallery | ✅ verified (rose-pink → white/yellow/peach) |
 | **Persistence across container recreation**: `docker compose down` + `up -d` (volumes kept) → order, catalogue and revenue stats intact | ✅ verified (same order number still DELIVERED; revenue ₹360 from real records) |
 
 ## 3. Blocked / not verifiable locally — honest list

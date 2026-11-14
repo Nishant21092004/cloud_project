@@ -83,7 +83,7 @@ docker compose exec backend npm run seed
 
 ---
 
-## 4. Run the automated test suite (46 tests)
+## 4. Run the automated test suite (49 tests)
 
 Uses a separate throwaway database — the real store keeps running untouched.
 
@@ -93,7 +93,7 @@ docker compose -f docker-compose.test.yml up --build --abort-on-container-exit -
 docker compose -f docker-compose.test.yml down -v   # clean up afterwards
 ```
 
-Expected last line: test summary with **46 passed**.
+Expected last line: test summary with **49 passed**.
 
 ---
 
