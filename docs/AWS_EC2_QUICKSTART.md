@@ -4,6 +4,8 @@
 > BloomNest AWS EC2 (`t3.micro`, Ubuntu 22.04, **ap-south-1 / Mumbai**) pe live hai:
 > **http://13.232.7.113** — smoke test **8/8 PASS**, seed complete
 > (56 flowers / 6 bouquets / 50 plants / 125 PIN codes), admin login verified.
+> Free DNS alias (no purchase): **http://13.232.7.113.sslip.io** — same site,
+> works on any device; breaks only if the instance IP changes (stop/start).
 > Admin: `admin@bloomnest.in` / `BloomNest@2026`.
 > Neeche ka guide wahi procedure hai jo follow kiya gaya (reproducible record).
 
