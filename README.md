@@ -115,6 +115,7 @@ Full documentation index:
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — system + database diagrams, request flows
 - [docs/API.md](docs/API.md) — every endpoint with auth rules and error codes
 - [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) — one-VM cloud deployment: HTTPS, firewall, backups, costs, limits
+- [docs/AWS_EC2_QUICKSTART.md](docs/AWS_EC2_QUICKSTART.md) — AWS Console se EC2 launch karke BloomNest live karna (click-by-click)
 - [docs/CLOUD_MAPPING.md](docs/CLOUD_MAPPING.md) — feature → cloud-concept mapping table
 - [docs/TESTING.md](docs/TESTING.md) — what was tested, actual results, what is blocked
 - [docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md) — 5-minute evaluation walkthrough
