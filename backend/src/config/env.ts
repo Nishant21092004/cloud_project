@@ -15,6 +15,13 @@ const schema = z.object({
   RAZORPAY_KEY_SECRET: z.string().optional().default(""),
   RAZORPAY_WEBHOOK_SECRET: z.string().optional().default(""),
   PAYMENTS_MODE: z.enum(["auto", "razorpay", "sandbox"]).default("auto"),
+  /**
+   * Session cookie `Secure` flag. Default "auto" = Secure in production (real
+   * HTTPS deployments). Set "false" when the production demo runs on plain
+   * HTTP (e.g. a VM IP without a domain) — browsers refuse Secure cookies
+   * over http:// except on localhost.
+   */
+  COOKIE_SECURE: z.enum(["auto", "true", "false"]).default("auto"),
 });
 
 const parsed = schema.safeParse(process.env);
