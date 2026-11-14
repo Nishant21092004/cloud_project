@@ -1,8 +1,11 @@
 # AWS EC2 Quick-Start — BloomNest ko cloud pe chalana (step-by-step)
 
-> **Status (honest):** is guide ke saare steps tested-ready hain, par **abhi tak
-> koi AWS resource create nahi hua hai** — AWS account aur login aapko karna hai.
-> Jab tak aap khud EC2 launch nahi karte, deployment "pending" hai, "done" nahi.
+> **Status (VERIFIED ✅ — 14 Nov 2026):** ye deployment **actually complete hua hai**.
+> BloomNest AWS EC2 (`t3.micro`, Ubuntu 22.04, **ap-south-1 / Mumbai**) pe live hai:
+> **http://13.232.7.113** — smoke test **8/8 PASS**, seed complete
+> (56 flowers / 6 bouquets / 50 plants / 125 PIN codes), admin login verified.
+> Admin: `admin@bloomnest.in` / `BloomNest@2026`.
+> Neeche ka guide wahi procedure hai jo follow kiya gaya (reproducible record).
 
 ## 0. Pehle kya chahiye
 
@@ -72,8 +75,9 @@ Dobara: `ssh -i ... ubuntu@<PUBLIC_IP>`, phir `docker --version` aur
 git clone https://github.com/Nishant21092004/cloud_project.git bloomnest
 cd bloomnest
 cp .env.example .env
-nano .env        # POSTGRES_PASSWORD aur JWT_SECRET badlo:
-                 #   openssl rand -hex 32   (do baar chalao, dono jagah paste)
+nano .env        # POSTGRES_PASSWORD aur JWT_SECRET badlo (openssl rand -hex 32):
+                 #   aur COOKIE_SECURE=false rakhna — plain-HTTP IP pe Secure
+                 #   cookie browsers reject kar dete, login silently toot jaata hai.
 docker compose up --build -d
 docker compose logs -f backend          # "migrations applied" dikhe to Ctrl+C
 docker compose exec backend npm run seed    # SIRF first boot pe
