@@ -46,9 +46,23 @@ export async function api<T>(path: string, opts: Options = {}): Promise<T> {
   return data as T;
 }
 
-/** Idempotency key generator for checkout (regenerated per checkout attempt session). */
+/**
+ * Idempotency key generator for checkout (regenerated per checkout attempt session).
+ * `crypto.randomUUID()` exists only in secure contexts (HTTPS / localhost) — the
+ * HTTP-over-IP demo would crash the whole checkout page. Fall back to
+ * getRandomValues (available everywhere) and finally Math.random.
+ */
 export function newIdempotencyKey(): string {
-  return `ck_${crypto.randomUUID()}`;
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return `ck_${crypto.randomUUID()}`;
+  }
+  const bytes = new Uint8Array(16);
+  if (typeof crypto !== "undefined" && typeof crypto.getRandomValues === "function") {
+    crypto.getRandomValues(bytes);
+  } else {
+    for (let i = 0; i < bytes.length; i++) bytes[i] = Math.floor(Math.random() * 256);
+  }
+  return `ck_${Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("")}`;
 }
 
 /** Uploads go as raw bytes — the server sniffs magic bytes, not headers. */
