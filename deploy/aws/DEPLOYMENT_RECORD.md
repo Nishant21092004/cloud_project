@@ -45,6 +45,21 @@
    tootta tha. `COOKIE_SECURE` env add kiya, server pe `COOKIE_SECURE=false` set kiya
 7. GitHub `cloud_project` repo pe push + free sslip.io naam docs me record kiya
 
+## 15 Nov 2026 — Checkout blank-page fix (verified live)
+
+- **Symptom:** cart me item daal ke checkout kholne pe blank white page; address form
+  aur payment options dikhte hi nahi the.
+- **Root cause:** checkout page render hote hi `crypto.randomUUID()` call karta tha —
+  ye **sirf secure context (HTTPS/localhost)** me available hota hai; plain HTTP IP pe
+  `undefined` hai, isliye React tree crash ho jaata tha (console: `TypeError:
+  crypto.randomUUID is not a function`).
+- **Fix:** `newIdempotencyKey()` me fallback chain — `crypto.randomUUID()` →
+  `crypto.getRandomValues()` → `Math.random()`. Key unique rehti hai, HTTP pe bhi chalta hai.
+- **Verified:** live pe demo customer se COD order placed — `BN-261115-MVUEP`,
+  total ₹639 (₹599 + ₹40 delivery), order page + timeline render, console error-free.
+- Commit: `ff4ac67` (GitHub `cb725fc`).
+
+
 ## Paise bachane ke rules (important!)
 
 - **Stop ≠ Terminate.** Demo ke baad: EC2 → instance select → *Instance state → Stop*.
